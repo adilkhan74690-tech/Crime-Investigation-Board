@@ -105,6 +105,25 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
+
+  // Attach modal closure and ESC key listeners globally once
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      const activeModal = document.querySelector('.modal-overlay.active');
+      if (activeModal) {
+        hideModal(activeModal.id);
+      }
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('modal-overlay')) {
+      hideModal(e.target.id);
+    }
+  });
+
+  // Officer search input listener
+  document.getElementById('officer-search')?.addEventListener('input', renderOfficersTable);
 });
 
 function getAvatarSvg(name) {
@@ -403,8 +422,6 @@ async function initDashboard() {
       registerBtn.style.display = 'none';
     }
   }
-  
-  document.getElementById('officer-search')?.addEventListener('input', renderOfficersTable);
   
   renderCounts();
   renderTasks();
@@ -1474,6 +1491,11 @@ async function handleOfficerSubmit(event) {
   const token = sessionStorage.getItem('cib_jwt_token');
   const payload = { name, email, phone, role, rank, department, policeStation };
 
+  const submitBtn = document.getElementById('officer-submit-btn');
+  const originalText = submitBtn.textContent;
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Saving...';
+
   try {
     let url = '/api/officers';
     let method = 'POST';
@@ -1505,6 +1527,9 @@ async function handleOfficerSubmit(event) {
   } catch (err) {
     console.error(err);
     triggerToast("Server connection error.", "danger");
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = originalText;
   }
 }
 

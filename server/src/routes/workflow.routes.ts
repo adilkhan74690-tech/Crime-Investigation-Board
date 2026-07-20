@@ -89,7 +89,7 @@ router.post('/register-fir', authenticateToken, authorizeRoles('SUPER_ADMIN', 'S
       title,
       description,
       reporter,
-      date: new Date().toISOString().split('T')[0],
+      date: new Date(),
       officerId: req.user.officerId
     }
   });
@@ -109,15 +109,18 @@ router.post('/create-case', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SU
     throw new ApiError(400, 'Missing required case initialization parameters.');
   }
 
+  const prismaPriority = (priority === 'Critical' ? 'High' : priority) as any;
+
   const newCase = await prisma.case.create({
     data: {
       id,
       title,
       crimeType,
-      priority,
+      priority: prismaPriority,
       officerId: assignedOfficerId,
       location,
       status: 'Active',
+      createdBy: req.user.officerId,
       victims: {
         create: [
           { name: victimName }
