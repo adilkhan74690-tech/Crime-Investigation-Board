@@ -106,12 +106,30 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Attach modal closure and ESC key listeners globally once
+  // Attach modal closure, ESC key, and tab focus trap listeners globally once
   document.addEventListener('keydown', (e) => {
+    const activeModal = document.querySelector('.modal-overlay.active');
+    if (!activeModal) return;
+
     if (e.key === 'Escape') {
-      const activeModal = document.querySelector('.modal-overlay.active');
-      if (activeModal) {
-        hideModal(activeModal.id);
+      hideModal(activeModal.id);
+    } else if (e.key === 'Tab') {
+      const focusables = activeModal.querySelectorAll('input, select, textarea, button, a[href]');
+      if (focusables.length === 0) return;
+      
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          last.focus();
+          e.preventDefault();
+        }
+      } else {
+        if (document.activeElement === last) {
+          first.focus();
+          e.preventDefault();
+        }
       }
     }
   });
@@ -1395,12 +1413,37 @@ async function renderOfficersList() {
 }
 
 // Modal System Implementation
+let previousActiveElement = null;
+
 function showModal(modalId) {
-  document.getElementById(modalId).classList.add('active');
+  const modal = document.getElementById(modalId);
+  if (!modal) return;
+  
+  previousActiveElement = document.activeElement;
+  modal.classList.add('active');
+  document.body.classList.add('modal-open');
+
+  // Focus first input/interactive element inside modal
+  const firstInput = modal.querySelector('input, select, textarea, button');
+  if (firstInput) {
+    setTimeout(() => firstInput.focus(), 50);
+  }
 }
 
 function hideModal(modalId) {
-  document.getElementById(modalId).classList.remove('active');
+  const modal = document.getElementById(modalId);
+  if (!modal) return;
+  
+  modal.classList.remove('active');
+  
+  const anyActive = document.querySelector('.modal-overlay.active');
+  if (!anyActive) {
+    document.body.classList.remove('modal-open');
+  }
+
+  if (previousActiveElement && typeof previousActiveElement.focus === 'function') {
+    previousActiveElement.focus();
+  }
 }
 
 let activeDetailTab = 'profile';
