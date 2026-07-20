@@ -31,6 +31,29 @@ export class AuthService {
       };
     }
 
+    // Completely bypass OTP flow for SUPER_ADMIN
+    if (officer.role === 'SUPER_ADMIN') {
+      const secret = process.env.JWT_SECRET || 'CIB_DEFAULT_CLASSIFIED_SECRET';
+      const token = jwt.sign(
+        { officerId: officer.id, role: officer.role, name: officer.name },
+        secret,
+        { expiresIn: '15m' }
+      );
+      const refreshToken = jwt.sign(
+        { officerId: officer.id, role: officer.role, name: officer.name },
+        secret,
+        { expiresIn: '7d' }
+      );
+      return {
+        message: 'OTP bypassed for Super Admin.',
+        bypassOtp: true,
+        token,
+        refreshToken,
+        role: officer.role,
+        name: officer.name
+      };
+    }
+
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expires = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiry
 

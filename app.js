@@ -209,6 +209,16 @@ async function handleLogin(event) {
             });
             const newLoginData = await newLoginResponse.json();
             if (newLoginResponse.ok) {
+              if (newLoginData.data && newLoginData.data.bypassOtp) {
+                sessionStorage.setItem('cib_session_active', 'true');
+                sessionStorage.setItem('cib_jwt_token', newLoginData.data.token);
+                sessionStorage.setItem('cib_officer_id', officerId);
+                sessionStorage.setItem('cib_officer_role', newLoginData.data.role);
+                sessionStorage.setItem('cib_officer_name', newLoginData.data.name);
+                triggerToast(`Access Verified. Welcome ${newLoginData.data.name}. Redirecting...`, "success");
+                setTimeout(() => initDashboard(), 1000);
+                return;
+              }
               triggerToast("One-time security verification code dispatched to registered officer device.", "success");
               stage2FA = true;
               document.getElementById('officer-id').disabled = true;
@@ -222,6 +232,17 @@ async function handleLogin(event) {
             triggerToast(changeData.error || "Password update failed.", "danger");
           }
           setAuthLoading(false);
+          return;
+        }
+
+        if (data.data && data.data.bypassOtp) {
+          sessionStorage.setItem('cib_session_active', 'true');
+          sessionStorage.setItem('cib_jwt_token', data.data.token);
+          sessionStorage.setItem('cib_officer_id', officerId);
+          sessionStorage.setItem('cib_officer_role', data.data.role);
+          sessionStorage.setItem('cib_officer_name', data.data.name);
+          triggerToast(`Access Verified. Welcome ${data.data.name}. Redirecting...`, "success");
+          setTimeout(() => initDashboard(), 1000);
           return;
         }
 
