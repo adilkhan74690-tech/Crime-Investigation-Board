@@ -1727,3 +1727,81 @@ button, input, select, textarea {
   }
 }
 
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-color);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-light);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-color);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Page Transition Animation - Mimicking Framer Motion fadeInUp */
+.page-container.active {
+  display: block;
+  animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Active Nav Item Enhancements */
+.nav-item.active {
+  background-color: rgba(37, 99, 235, 0.12) !important;
+  color: #60a5fa !important;
+  border-left: 3px solid var(--primary-color);
+  border-top-left-radius: 0 !important;
+  border-bottom-left-radius: 0 !important;
+  padding-left: 9px !important;
+}
+
+/* Button & Form Interaction Polish */
+.btn-primary {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.btn-primary:active {
+  transform: scale(0.97);
+}
+.form-input {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.form-input:focus {
+  transform: translateY(-1px);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+/* Modal POP Animation */
+.modal-overlay.active .modal-container {
+  animation: modalPop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes modalPop {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+

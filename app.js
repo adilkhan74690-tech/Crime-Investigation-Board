@@ -468,15 +468,28 @@ function initApexCharts() {
     '#chart-evidence-stats'
   ];
 
-  if (!window.CIB_DB.cases || window.CIB_DB.cases.length === 0) {
-    chartContainers.forEach(sel => {
-      const container = document.querySelector(sel);
-      if (container) {
-        container.innerHTML = `<div style="text-align: center; color: var(--text-secondary); padding: 48px 24px; font-size: 13px;">No analytics available.</div>`;
-      }
-    });
-    return;
-  }
+  const hasCases = window.CIB_DB.cases && window.CIB_DB.cases.length > 0;
+  const casesToAnalyze = hasCases ? window.CIB_DB.cases : [
+    { id: 'CASE-2026-001', title: 'Syndicate Warehouse Raid', crimeType: 'Organized Crime', priority: 'High', location: 'Sector 4', status: 'Solved', createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString() },
+    { id: 'CASE-2026-002', title: 'Mainframe Ransomware Attack', crimeType: 'Cybercrime', priority: 'Critical', location: 'Downtown HQ', status: 'Active', createdAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString() },
+    { id: 'CASE-2026-003', title: 'Eastside Securities Embezzlement', crimeType: 'Financial Crime', priority: 'Medium', location: 'Financial District', status: 'Active', createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString() },
+    { id: 'CASE-2026-004', title: 'Port Authority Smuggling ring', crimeType: 'Organized Crime', priority: 'High', location: 'Harbor Gate 12', status: 'Solved', createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString() },
+    { id: 'CASE-2026-005', title: 'Redwood Residence Intrusion', crimeType: 'Homicide', priority: 'Critical', location: 'North Suburbs', status: 'Active', createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() }
+  ];
+
+  const hasOfficers = window.CIB_DB.officers && window.CIB_DB.officers.length > 0;
+  const officersToAnalyze = hasOfficers ? window.CIB_DB.officers : [
+    { name: 'Det. Sarah Jenkins', department: 'Major Crimes Division', solvedCases: 14, assignedCases: 4 },
+    { name: 'Agent Marcus Vance', department: 'Digital Forensics Unit', solvedCases: 9, assignedCases: 2 },
+    { name: 'Insp. Rahul Dev', department: 'Homicide Unit', solvedCases: 16, assignedCases: 5 },
+    { name: 'Agent Clara Zhao', department: 'Financial Crimes Division', solvedCases: 7, assignedCases: 1 },
+    { name: 'Det. James Miller', department: 'Organized Crime Unit', solvedCases: 11, assignedCases: 3 }
+  ];
+
+  const hasEvidence = window.CIB_DB.evidence && window.CIB_DB.evidence.length > 0;
+  const evidenceToAnalyze = hasEvidence ? window.CIB_DB.evidence : [
+    { category: 'DigitalHardware' }, { category: 'Weapon' }, { category: 'Weapon' }, { category: 'Document' }, { category: 'Narcotics' }
+  ];
 
   // Parse last 6 months dynamically
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -494,37 +507,43 @@ function initApexCharts() {
     });
   }
   
-  window.CIB_DB.cases.forEach(c => {
-    const cDate = new Date(c.createdAt || c.createdDate || Date.now());
-    const cMonth = cDate.getMonth();
-    const cYear = cDate.getFullYear();
-    
-    const mIdx = last6Months.findIndex(m => m.monthIndex === cMonth && m.year === cYear);
-    if (mIdx !== -1) {
-      incidents[mIdx]++;
-      if (c.status === 'Solved') {
-        resolved[mIdx]++;
+  // Set sample incidents/resolved curve if empty
+  if (!hasCases) {
+    incidents[0] = 4; incidents[1] = 6; incidents[2] = 5; incidents[3] = 9; incidents[4] = 8; incidents[5] = 12;
+    resolved[0] = 3; resolved[1] = 5; resolved[2] = 4; resolved[3] = 7; resolved[4] = 6; resolved[5] = 9;
+  } else {
+    casesToAnalyze.forEach(c => {
+      const cDate = new Date(c.createdAt || c.createdDate || Date.now());
+      const cMonth = cDate.getMonth();
+      const cYear = cDate.getFullYear();
+      
+      const mIdx = last6Months.findIndex(m => m.monthIndex === cMonth && m.year === cYear);
+      if (mIdx !== -1) {
+        incidents[mIdx]++;
+        if (c.status === 'Solved') {
+          resolved[mIdx]++;
+        }
       }
-    }
-  });
+    });
+  }
 
   const categories = last6Months.map(m => m.name);
 
   // Group by crime type
   const crimeTypeCounts = {};
-  window.CIB_DB.cases.forEach(c => {
+  casesToAnalyze.forEach(c => {
     crimeTypeCounts[c.crimeType] = (crimeTypeCounts[c.crimeType] || 0) + 1;
   });
   const crimeLabels = Object.keys(crimeTypeCounts);
   const crimeSeries = Object.values(crimeTypeCounts);
 
   // Pending vs Solved
-  const solvedCount = window.CIB_DB.cases.filter(c => c.status === 'Solved').length;
-  const activeCount = window.CIB_DB.cases.filter(c => c.status === 'Active').length;
+  const solvedCount = casesToAnalyze.filter(c => c.status === 'Solved').length;
+  const activeCount = casesToAnalyze.filter(c => c.status === 'Active').length;
 
   // Evidence Counts
   const evCounts = { 'DigitalHardware': 0, 'Weapon': 0, 'Document': 0, 'Narcotics': 0, 'Other': 0 };
-  (window.CIB_DB.evidence || []).forEach(e => {
+  evidenceToAnalyze.forEach(e => {
     if (evCounts[e.category] !== undefined) {
       evCounts[e.category]++;
     } else {
@@ -536,7 +555,7 @@ function initApexCharts() {
 
   // Department performance
   const deptPerformance = {};
-  window.CIB_DB.officers.forEach(o => {
+  officersToAnalyze.forEach(o => {
     const dept = o.department || 'Other';
     if (!deptPerformance[dept]) {
       deptPerformance[dept] = { solved: 0, active: 0 };
@@ -549,7 +568,7 @@ function initApexCharts() {
   const deptActive = deptLabels.map(d => deptPerformance[d].active);
 
   // Top 5 Officers performance
-  const sortedOfficers = [...window.CIB_DB.officers]
+  const sortedOfficers = [...officersToAnalyze]
     .sort((a, b) => (b.solvedCases || 0) - (a.solvedCases || 0))
     .slice(0, 5);
   const officerNames = sortedOfficers.map(o => o.name);
@@ -785,23 +804,40 @@ function switchDetailTab(tabId) {
   document.getElementById(`tab-${tabId}`).classList.add('active');
 }
 
+// Counter animation helper
+function animateCounter(elementId, targetValue, duration = 800) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  
+  if (targetValue === 0) {
+    el.textContent = '0';
+    return;
+  }
+  
+  let start = 0;
+  const stepTime = Math.max(Math.floor(duration / targetValue), 10);
+  
+  const timer = setInterval(() => {
+    start += 1;
+    el.textContent = start;
+    if (start >= targetValue) {
+      el.textContent = targetValue;
+      clearInterval(timer);
+    }
+  }, stepTime);
+}
+
 // Statistics counts
 function renderCounts() {
   const activeCount = window.CIB_DB.cases.filter(c => c.status === 'Active').length;
   const solvedCount = window.CIB_DB.cases.filter(c => c.status === 'Solved').length;
   const highPriority = window.CIB_DB.cases.filter(c => c.priority === 'High' || c.priority === 'Critical').length;
+  const evidenceCount = (window.CIB_DB.evidence || []).length;
   
-  const act = document.getElementById('count-active');
-  if (act) act.textContent = activeCount;
-  
-  const sol = document.getElementById('count-solved');
-  if (sol) sol.textContent = solvedCount;
-  
-  const pri = document.getElementById('count-priority');
-  if (pri) pri.textContent = highPriority;
-  
-  const ev = document.getElementById('count-evidence');
-  if (ev) ev.textContent = window.CIB_DB.evidence.length;
+  animateCounter('count-active', activeCount);
+  animateCounter('count-solved', solvedCount);
+  animateCounter('count-priority', highPriority);
+  animateCounter('count-evidence', evidenceCount);
 }
 
 // Render checklist Tasks
