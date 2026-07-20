@@ -22,10 +22,10 @@ let totalAuditLogs = 0;
 // Role Permissions configurations mapping views for each user profile
 const ROLE_PERMISSIONS = {
   SUPER_ADMIN: ['sa-dashboard', 'sa-officers', 'sa-departments', 'sa-cases', 'io-evidence', 'io-forensics', 'sa-audit-logs', 'sa-analytics', 'sa-settings'],
-  SUPERINTENDENT: ['sp-dashboard', 'sp-review-cases', 'sa-departments', 'sp-approvals', 'sa-analytics'],
-  SUB_INSPECTOR: ['si-dashboard', 'si-register-fir', 'si-create-case', 'sp-assign-officers', 'si-victims', 'si-witnesses', 'si-suspects', 'io-timeline'],
-  INSPECTOR: ['io-dashboard', 'io-cases', 'io-evidence', 'io-timeline', 'io-notes', 'si-witnesses'],
-  FORENSIC_OFFICER: ['fo-dashboard', 'fo-pending', 'fo-reports', 'fo-fingerprint', 'fo-dna', 'fo-upload']
+  SUPERINTENDENT: ['sp-dashboard', 'sp-review-cases', 'sp-approvals', 'io-evidence', 'sa-analytics'],
+  INSPECTOR: ['io-dashboard', 'io-cases', 'io-evidence', 'io-timeline', 'io-notes', 'io-forensics'],
+  SUB_INSPECTOR: ['si-dashboard', 'si-register-fir', 'si-create-case', 'io-cases'],
+  FORENSIC_OFFICER: ['fo-dashboard', 'fo-pending', 'fo-reports', 'fo-upload', 'fo-fingerprint', 'fo-dna']
 };
 
 const VIEW_METADATA = {

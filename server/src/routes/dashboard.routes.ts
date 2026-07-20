@@ -8,7 +8,17 @@ const router = Router();
 
 // Endpoint: Fetch comprehensive platform payload for dashboard view
 router.get('/dashboard-payload', authenticateToken, asyncHandler(async (req: any, res: any) => {
+  const role = req.user.role;
+  const officerId = req.user.officerId;
+
+  // Filter cases by role
+  let caseWhereClause: any = {};
+  if (role === 'INSPECTOR' || role === 'SUB_INSPECTOR') {
+    caseWhereClause.officerId = officerId;
+  }
+
   const cases = await prisma.case.findMany({
+    where: caseWhereClause,
     include: { witnesses: true, timeline: true, evidence: true, forensics: true, victims: true, suspects: true }
   });
 
@@ -16,11 +26,30 @@ router.get('/dashboard-payload', authenticateToken, asyncHandler(async (req: any
     include: { user: true }
   });
 
+  // Filter evidence by role
+  let evidenceWhereClause: any = {};
+  if (role === 'INSPECTOR' || role === 'SUB_INSPECTOR') {
+    evidenceWhereClause.case = { officerId };
+  } else if (role === 'FORENSIC_OFFICER') {
+    evidenceWhereClause.collectedBy = officerId;
+  }
+
   const evidence = await prisma.evidence.findMany({
+    where: evidenceWhereClause,
     include: { transfers: true }
   });
 
-  const forensics = await prisma.forensicReport.findMany();
+  // Filter forensics by role
+  let forensicWhereClause: any = {};
+  if (role === 'INSPECTOR') {
+    forensicWhereClause.case = { officerId };
+  } else if (role === 'FORENSIC_OFFICER') {
+    forensicWhereClause.analyst = req.user.name;
+  }
+
+  const forensics = await prisma.forensicReport.findMany({
+    where: forensicWhereClause
+  });
   
   const activities = await prisma.activityLog.findMany({
     take: 10,
