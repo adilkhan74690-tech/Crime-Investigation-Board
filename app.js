@@ -6,7 +6,8 @@ window.CIB_DB = {
   evidence: [],
   forensics: [],
   tasks: [],
-  recentActivities: []
+  recentActivities: [],
+  firs: []
 };
 let currentActiveView = 'sa-dashboard';
 let sidebarCollapsed = false;
@@ -454,6 +455,7 @@ async function initDashboard() {
   initRoomView();
   renderDepartmentsRegistry();
   renderSubInspectorRegistries();
+  fetchAndRenderFirs();
   
   // Switch to the first authorized view of the role
   const firstView = ROLE_PERMISSIONS[activeRole][0];
@@ -1974,20 +1976,103 @@ window.renderOfficersTable = renderOfficersTable;
 window.renderOfficersList = renderOfficersList;
 
 // Investigation Workflow Implementations
+async function fetchAndRenderFirs() {
+  const tbody = document.getElementById('si-firs-table-body');
+  if (!tbody) return;
+
+  const token = sessionStorage.getItem('cib_jwt_token');
+  try {
+    const response = await fetch('/api/firs', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const result = await response.json();
+    if (response.ok && result.success) {
+      window.CIB_DB.firs = result.data || [];
+      tbody.innerHTML = '';
+
+      if (window.CIB_DB.firs.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-secondary); padding: 24px;">No FIR records registered.</td></tr>`;
+        return;
+      }
+
+      window.CIB_DB.firs.forEach(f => {
+        const tr = document.createElement('tr');
+        const hasCase = window.CIB_DB.cases.some(c => c.firId === f.id);
+        const actionBtn = hasCase 
+          ? `<span class="badge badge-status-solved" style="padding: 4px 10px; font-size: 11px;"><i class="ri-checkbox-circle-line"></i> Case Opened</span>`
+          : `<button class="btn-primary" style="padding: 6px 12px; font-size:11px; width:auto;" onclick="showCreateCaseFromFirModal('${f.id}')"><i class="ri-folder-add-line"></i> Open Case</button>`;
+
+        const dateStr = f.date ? new Date(f.date).toLocaleDateString() : 'N/A';
+        tr.innerHTML = `
+          <td><strong style="color: var(--primary-color); font-family: monospace;">${f.id}</strong></td>
+          <td>${f.reporter}</td>
+          <td><span class="badge priority-medium" style="font-size:11px;">${f.crimeCategory || 'Other'}</span></td>
+          <td>${dateStr}</td>
+          <td>${f.location || 'N/A'}</td>
+          <td><span class="badge badge-status-active" style="font-size: 11px;">${f.status}</span></td>
+          <td style="text-align: right;">${actionBtn}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+  } catch (err) {
+    console.error('[FIR list] Fetch failed:', err);
+  }
+}
+
 function showRegisterFirModal() {
-  const randNum = Math.floor(100 + Math.random() * 900);
-  document.getElementById('fir-form-id').value = `FIR-2026-${randNum}`;
-  document.getElementById('fir-case-id').value = `CASE-2026-${randNum}`;
+  document.getElementById('fir-modal-mode').value = 'register';
+  document.getElementById('fir-form-details-section').style.display = 'flex';
+  document.getElementById('fir-form-case-section').style.display = 'none';
+
+  // Modal Title & Button
+  const modalTitle = document.querySelector('#modal-register-fir .modal-title');
+  if (modalTitle) modalTitle.innerHTML = `<i class="ri-file-add-line"></i> Register FIR Entry`;
+  const submitBtn = document.querySelector('#modal-register-fir button[type="submit"]');
+  if (submitBtn) {
+    submitBtn.innerHTML = `Register FIR`;
+    submitBtn.disabled = false;
+  }
+
+  // Clear inputs
+  document.getElementById('fir-form-id').value = '';
   document.getElementById('fir-form-reporter').value = '';
+  document.getElementById('fir-form-contact').value = '';
   document.getElementById('fir-form-title').value = '';
+  document.getElementById('fir-form-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('fir-form-time').value = new Date().toTimeString().split(' ')[0].slice(0, 5);
   document.getElementById('fir-form-desc').value = '';
+  document.getElementById('fir-form-location').value = '';
+  document.getElementById('fir-form-category').value = 'Homicide';
+
+  showModal('modal-register-fir');
+}
+
+function showCreateCaseFromFirModal(firId) {
+  document.getElementById('fir-modal-mode').value = 'create-case';
+  document.getElementById('fir-form-details-section').style.display = 'none';
+  document.getElementById('fir-form-case-section').style.display = 'flex';
+
+  // Modal Title & Button
+  const modalTitle = document.querySelector('#modal-register-fir .modal-title');
+  if (modalTitle) modalTitle.innerHTML = `<i class="ri-folder-add-line"></i> Initiate Criminal Case from FIR`;
+  const submitBtn = document.querySelector('#modal-register-fir button[type="submit"]');
+  if (submitBtn) {
+    submitBtn.innerHTML = `Create Case File`;
+    submitBtn.disabled = false;
+  }
+
+  // Populate IDs
+  document.getElementById('fir-form-id').value = firId;
+  const rawNum = firId.split('-').pop() || '';
+  document.getElementById('fir-case-id').value = `CASE-2026-${rawNum}`;
   document.getElementById('fir-case-title').value = '';
-  document.getElementById('fir-case-location').value = '';
   document.getElementById('fir-victim-name').value = '';
   document.getElementById('fir-victim-contact').value = '';
   document.getElementById('fir-suspect-name').value = '';
   document.getElementById('fir-suspect-desc').value = '';
-  
+
+  // Setup officer dropdown
   const officerSelect = document.getElementById('fir-assigned-officer');
   if (officerSelect) {
     officerSelect.innerHTML = '<option value="">Select Officer...</option>';
@@ -2004,72 +2089,110 @@ function showRegisterFirModal() {
 
 async function handleFirSubmit(event) {
   event.preventDefault();
+  const mode = document.getElementById('fir-modal-mode').value;
   const firId = document.getElementById('fir-form-id').value;
-  const reporter = document.getElementById('fir-form-reporter').value;
-  const firTitle = document.getElementById('fir-form-title').value;
-  const firDesc = document.getElementById('fir-form-desc').value;
-  
-  const caseId = document.getElementById('fir-case-id').value;
-  const caseTitle = document.getElementById('fir-case-title').value;
-  const crimeType = document.getElementById('fir-crime-type').value;
-  const priority = document.getElementById('fir-case-priority').value;
-  const location = document.getElementById('fir-case-location').value;
-  const assignedOfficerId = document.getElementById('fir-assigned-officer').value;
-  const victimName = document.getElementById('fir-victim-name').value;
-  const suspectName = document.getElementById('fir-suspect-name').value;
-
   const token = sessionStorage.getItem('cib_jwt_token');
 
+  const submitBtn = document.querySelector('#modal-register-fir button[type="submit"]');
+  const originalHtml = submitBtn.innerHTML;
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = `<i class="ri-loader-4-line spinner"></i> Processing...`;
+
   try {
-    // 1. Register FIR
-    const firResponse = await fetch('/api/workflow/register-fir', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ id: firId, title: firTitle, description: firDesc, reporter })
-    });
-    
-    const firResult = await firResponse.json();
-    if (!firResponse.ok || !firResult.success) {
-      triggerToast(firResult.error || "Failed to register FIR.", "danger");
-      return;
-    }
+    if (mode === 'register') {
+      const reporter = document.getElementById('fir-form-reporter').value;
+      const complainantContact = document.getElementById('fir-form-contact').value;
+      const title = document.getElementById('fir-form-title').value;
+      const incidentDate = document.getElementById('fir-form-date').value;
+      const incidentTime = document.getElementById('fir-form-time').value;
+      const crimeCategory = document.getElementById('fir-form-category').value;
+      const location = document.getElementById('fir-form-location').value;
+      const description = document.getElementById('fir-form-desc').value;
 
-    // 2. Create Case
-    const caseResponse = await fetch('/api/workflow/create-case', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        id: caseId,
-        title: caseTitle,
-        crimeType,
-        priority,
-        location,
-        firId,
-        assignedOfficerId,
-        victimName,
-        suspectName
-      })
-    });
+      const response = await fetch('/api/firs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          title,
+          description,
+          reporter,
+          complainantContact,
+          incidentDate,
+          incidentTime,
+          crimeCategory,
+          location
+        })
+      });
 
-    const caseResult = await caseResponse.json();
-    if (caseResponse.ok && caseResult.success) {
-      triggerToast("FIR registered and Case file created successfully.", "success");
-      hideModal('modal-register-fir');
-      
-      // Refresh local cache and UI
-      await initDashboard();
+      const result = await response.json();
+      if (response.ok && result.success) {
+        triggerToast(`FIR successfully logged. Assigned reference ID: ${result.data.id}`, "success");
+        hideModal('modal-register-fir');
+        await initDashboard();
+      } else {
+        triggerToast(result.error || "Failed to register FIR.", "danger");
+      }
     } else {
-      triggerToast(caseResult.error || "Failed to initiate Case.", "danger");
+      // mode === 'create-case'
+      const caseId = document.getElementById('fir-case-id').value;
+      const caseTitle = document.getElementById('fir-case-title').value;
+      const priority = document.getElementById('fir-case-priority').value;
+      const assignedOfficerId = document.getElementById('fir-assigned-officer').value;
+      const victimName = document.getElementById('fir-victim-name').value;
+      const victimContact = document.getElementById('fir-victim-contact').value;
+      const suspectName = document.getElementById('fir-suspect-name').value;
+      const suspectDesc = document.getElementById('fir-suspect-desc').value;
+
+      // Extract crime type and location from matched FIR details
+      const matchedFir = (window.CIB_DB.firs || []).find(f => f.id === firId);
+      const crimeType = matchedFir ? matchedFir.crimeCategory : 'Other';
+      const location = matchedFir ? matchedFir.location : 'Unknown';
+
+      // Inline validation
+      if (!caseId.trim() || !caseTitle.trim() || !assignedOfficerId) {
+        triggerToast("Please complete all required case details.", "danger");
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalHtml;
+        return;
+      }
+
+      const caseResponse = await fetch('/api/workflow/create-case', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          id: caseId,
+          title: caseTitle,
+          crimeType,
+          priority,
+          location,
+          firId,
+          assignedOfficerId,
+          victimName,
+          suspectName
+        })
+      });
+
+      const caseResult = await caseResponse.json();
+      if (caseResponse.ok && caseResult.success) {
+        triggerToast("Case file generated and initiated successfully.", "success");
+        hideModal('modal-register-fir');
+        await initDashboard();
+      } else {
+        triggerToast(caseResult.error || "Failed to initiate Case.", "danger");
+      }
     }
   } catch (err) {
     console.error(err);
     triggerToast("Server connection error.", "danger");
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = originalHtml;
   }
 }
 
@@ -2347,7 +2470,9 @@ async function completeInvestigation(caseId) {
 }
 
 window.showRegisterFirModal = showRegisterFirModal;
+window.showCreateCaseFromFirModal = showCreateCaseFromFirModal;
 window.handleFirSubmit = handleFirSubmit;
+window.fetchAndRenderFirs = fetchAndRenderFirs;
 window.showAssignInspectorModal = showAssignInspectorModal;
 window.handleAssignInspectorSubmit = handleAssignInspectorSubmit;
 window.showEvidenceUploadModal = showEvidenceUploadModal;

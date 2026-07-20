@@ -132,16 +132,21 @@ model Case {
 }
 
 model Fir {
-  id          String   @id @default(uuid())
-  title       String
-  description String
-  reporter    String
-  date        DateTime @default(now())
-  officerId   String
-  officer     Officer  @relation(fields: [officerId], references: [id])
-  case        Case?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                 String   @id
+  title              String
+  description        String
+  reporter           String
+  complainantContact String?
+  incidentTime       String?
+  crimeCategory      String?
+  location           String?
+  status             String   @default("Registered")
+  date               DateTime @default(now())
+  officerId          String
+  officer            Officer  @relation(fields: [officerId], references: [id])
+  case               Case?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
 
 model Victim {

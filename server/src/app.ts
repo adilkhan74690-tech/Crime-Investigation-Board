@@ -13,6 +13,7 @@ import dashboardRoutes from './routes/dashboard.routes';
 import officerRoutes from './routes/officer.routes';
 import settingsRoutes from './routes/settings.routes';
 import searchRoutes from './routes/search.routes';
+import firRoutes from './routes/fir.routes';
 import { errorHandler } from './middleware/errorHandler';
 
 import path from 'path';
@@ -41,6 +42,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/officers', officerRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/search', searchRoutes);
+app.use('/api/firs', firRoutes);
 
 // Centralized error recovery middleware
 app.use(errorHandler);
