@@ -24,29 +24,6 @@ export class AuthService {
       };
     }
 
-    // DEMO-ONLY SHORTCUT: Securely bypass OTP verification ONLY for the default root Super Admin (SA-001)
-    if (officer.id === 'SA-001') {
-      const secret = process.env.JWT_SECRET || 'CIB_DEFAULT_CLASSIFIED_SECRET';
-      const token = jwt.sign(
-        { officerId: officer.id, role: officer.role, name: officer.name },
-        secret,
-        { expiresIn: '15m' }
-      );
-      const refreshToken = jwt.sign(
-        { officerId: officer.id, role: officer.role, name: officer.name },
-        secret,
-        { expiresIn: '7d' }
-      );
-      return {
-        message: 'OTP bypassed for default Super Admin (demo mode).',
-        bypassOtp: true,
-        token,
-        refreshToken,
-        role: officer.role,
-        name: officer.name
-      };
-    }
-
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const expires = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiry
 
@@ -65,7 +42,6 @@ export class AuthService {
       }
     });
 
-    console.log(`[DEV_DEBUG] GENERATED OTP FOR ${officer.id}: ${otp}`);
     await MailService.sendOtpEmail(officer.email, officer.name, otp);
     return { message: 'OTP successfully dispatched.' };
   }

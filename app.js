@@ -1,4 +1,13 @@
 // Application State & Controller Logic v2 with JWT OTP Backend Integrations & Dynamic Roles Dashboards
+window.CIB_DB = {
+  currentUser: null,
+  officers: [],
+  cases: [],
+  evidence: [],
+  forensics: [],
+  tasks: [],
+  recentActivities: []
+};
 let currentActiveView = 'sa-dashboard';
 let sidebarCollapsed = false;
 let trendChart = null;
@@ -200,16 +209,6 @@ async function handleLogin(event) {
             });
             const newLoginData = await newLoginResponse.json();
             if (newLoginResponse.ok) {
-              if (newLoginData.data && newLoginData.data.bypassOtp) {
-                // Demo-only shortcut for root Super Admin account (SA-001)
-                triggerToast("Root authentication bypassed for demonstration.", "success");
-                sessionStorage.setItem('cib_jwt_token', newLoginData.data.token);
-                sessionStorage.setItem('cib_officer_id', officerId);
-                sessionStorage.setItem('cib_officer_role', newLoginData.data.role);
-                sessionStorage.setItem('cib_officer_name', newLoginData.data.name);
-                initDashboard();
-                return;
-              }
               triggerToast("One-time security verification code dispatched to registered officer device.", "success");
               stage2FA = true;
               document.getElementById('officer-id').disabled = true;
@@ -223,17 +222,6 @@ async function handleLogin(event) {
             triggerToast(changeData.error || "Password update failed.", "danger");
           }
           setAuthLoading(false);
-          return;
-        }
-
-        // Demo-only shortcut: Check if OTP is bypassed on backend for root Super Admin (SA-001)
-        if (data.data && data.data.bypassOtp) {
-          triggerToast("Root authentication bypassed for demonstration.", "success");
-          sessionStorage.setItem('cib_jwt_token', data.data.token);
-          sessionStorage.setItem('cib_officer_id', officerId);
-          sessionStorage.setItem('cib_officer_role', data.data.role);
-          sessionStorage.setItem('cib_officer_name', data.data.name);
-          initDashboard();
           return;
         }
 
@@ -275,6 +263,7 @@ async function handleLogin(event) {
         sessionStorage.setItem('cib_session_active', 'true');
         sessionStorage.setItem('cib_jwt_token', data.data.token);
         sessionStorage.setItem('cib_officer_role', data.data.role);
+        sessionStorage.setItem('cib_officer_name', data.data.name);
         sessionStorage.setItem('cib_officer_id', officerId);
         
         triggerToast(`Access Verified. Welcome ${data.data.name}. Redirecting...`, "success");
@@ -374,8 +363,8 @@ async function initDashboard() {
   
   // Find current officer avatar and name
   const officer = window.CIB_DB.officers.find(o => o.id === activeId);
-  const name = officer ? officer.name : 'Adil Khan';
-  const rank = officer ? officer.rank : 'Supervisory Special Agent';
+  const name = officer ? officer.name : (sessionStorage.getItem('cib_officer_name') || 'Officer');
+  const rank = officer ? officer.rank : (sessionStorage.getItem('cib_officer_role') || 'Special Agent');
   const avatar = getAvatarSvg(name);
   
   document.getElementById('navbar-avatar').src = avatar;
