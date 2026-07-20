@@ -1506,6 +1506,44 @@
               </select>
             </div>
           </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div class="form-group">
+              <label class="form-label" for="fir-assigned-officer">Assigned Officer</label>
+              <select id="fir-assigned-officer" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
+                <option value="">Select Officer...</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="fir-case-department">Department Division</label>
+              <select id="fir-case-department" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
+                <option value="MAJOR_CRIMES_DIVISION">Major Crimes Division</option>
+                <option value="HOMICIDE_UNIT">Homicide Unit</option>
+                <option value="DIGITAL_FORENSICS_UNIT">Digital Forensics Unit</option>
+                <option value="FINANCIAL_CRIMES_DIVISION">Financial Crimes Division</option>
+                <option value="ORGANIZED_CRIME_UNIT">Organized Crime Unit</option>
+              </select>
+            </div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div class="form-group">
+              <label class="form-label" for="fir-victim-name">Victim Name</label>
+              <input type="text" id="fir-victim-name" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="fir-victim-contact">Victim Contact (Email/Phone)</label>
+              <input type="text" id="fir-victim-contact" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
+            </div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div class="form-group">
+              <label class="form-label" for="fir-suspect-name">Suspect Name</label>
+              <input type="text" id="fir-suspect-name" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="fir-suspect-desc">Suspect Description / Aliases</label>
+              <input type="text" id="fir-suspect-desc" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
+            </div>
+          </div>
           <div class="form-group">
             <label class="form-label" for="fir-case-location">Incident Location / Jurisdiction</label>
             <input type="text" id="fir-case-location" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>

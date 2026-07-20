@@ -1857,7 +1857,22 @@ function showRegisterFirModal() {
   document.getElementById('fir-form-desc').value = '';
   document.getElementById('fir-case-title').value = '';
   document.getElementById('fir-case-location').value = '';
+  document.getElementById('fir-victim-name').value = '';
+  document.getElementById('fir-victim-contact').value = '';
+  document.getElementById('fir-suspect-name').value = '';
+  document.getElementById('fir-suspect-desc').value = '';
   
+  const officerSelect = document.getElementById('fir-assigned-officer');
+  if (officerSelect) {
+    officerSelect.innerHTML = '<option value="">Select Officer...</option>';
+    (window.CIB_DB.officers || []).forEach(o => {
+      const option = document.createElement('option');
+      option.value = o.id;
+      option.textContent = `${o.name} (${o.role})`;
+      officerSelect.appendChild(option);
+    });
+  }
+
   showModal('modal-register-fir');
 }
 
@@ -1873,6 +1888,9 @@ async function handleFirSubmit(event) {
   const crimeType = document.getElementById('fir-crime-type').value;
   const priority = document.getElementById('fir-case-priority').value;
   const location = document.getElementById('fir-case-location').value;
+  const assignedOfficerId = document.getElementById('fir-assigned-officer').value;
+  const victimName = document.getElementById('fir-victim-name').value;
+  const suspectName = document.getElementById('fir-suspect-name').value;
 
   const token = sessionStorage.getItem('cib_jwt_token');
 
@@ -1900,7 +1918,17 @@ async function handleFirSubmit(event) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify({ id: caseId, title: caseTitle, crimeType, priority, location, firId })
+      body: JSON.stringify({
+        id: caseId,
+        title: caseTitle,
+        crimeType,
+        priority,
+        location,
+        firId,
+        assignedOfficerId,
+        victimName,
+        suspectName
+      })
     });
 
     const caseResult = await caseResponse.json();

@@ -7,7 +7,9 @@ export class CaseRepository {
         witnesses: true,
         timeline: true,
         evidence: true,
-        forensics: true
+        forensics: true,
+        victims: true,
+        suspects: true
       }
     });
   }
@@ -19,7 +21,9 @@ export class CaseRepository {
         witnesses: true,
         timeline: true,
         evidence: true,
-        forensics: true
+        forensics: true,
+        victims: true,
+        suspects: true
       }
     });
   }
