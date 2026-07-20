@@ -7,6 +7,13 @@ import { prisma } from '../config/database';
 
 export class AuthService {
   public static async requestOtp(officerId: string, password: string): Promise<{ message: string; passwordChangeRequired?: boolean; bypassOtp?: boolean; token?: string; refreshToken?: string; role?: string; name?: string }> {
+    if (!process.env.DATABASE_URL) {
+      throw new ApiError(500, 'Render Server Configuration Error: DATABASE_URL is not set.');
+    }
+    if (!process.env.JWT_SECRET) {
+      throw new ApiError(500, 'Render Server Configuration Error: JWT_SECRET is not set.');
+    }
+
     const officer = await OfficerRepository.findById(officerId);
     if (!officer) {
       throw new ApiError(401, 'Officer ID validation failure.');
@@ -42,8 +49,21 @@ export class AuthService {
       }
     });
 
-    await MailService.sendOtpEmail(officer.email, officer.name, otp);
-    return { message: 'OTP successfully dispatched.' };
+    let mailSuccess = true;
+    try {
+      await MailService.sendOtpEmail(officer.email, officer.name, otp);
+      console.log(`[AUTH LOG] OTP email successfully dispatched to ${officer.email}`);
+    } catch (mailErr: any) {
+      mailSuccess = false;
+      console.error(`[AUTH LOG/WARNING] Failed to dispatch OTP email to ${officer.email}. Error: ${mailErr.message}`);
+      console.log(`[AUTH LOG/ALERT] RENDER STARTUP OTP FALLBACK CODE FOR ${officer.id}: ${otp}`);
+    }
+
+    return { 
+      message: mailSuccess 
+        ? 'OTP successfully dispatched.' 
+        : 'OTP email dispatch failed. Dynamic fallback OTP logged to server logs.' 
+    };
   }
 
   public static async changePassword(officerId: string, oldPassword: string, newPassword: string): Promise<string> {
@@ -158,7 +178,18 @@ export class AuthService {
       }
     });
 
-    await MailService.sendOtpEmail(officer.email, officer.name, otp);
-    return 'OTP verification code resent successfully.';
+    let mailSuccess = true;
+    try {
+      await MailService.sendOtpEmail(officer.email, officer.name, otp);
+      console.log(`[AUTH LOG] Resent OTP email successfully to ${officer.email}`);
+    } catch (mailErr: any) {
+      mailSuccess = false;
+      console.error(`[AUTH LOG/WARNING] Failed to resend OTP email to ${officer.email}. Error: ${mailErr.message}`);
+      console.log(`[AUTH LOG/ALERT] RENDER STARTUP OTP FALLBACK CODE FOR ${officer.id}: ${otp}`);
+    }
+
+    return mailSuccess 
+      ? 'OTP verification code resent successfully.' 
+      : 'OTP resend email dispatch failed. Dynamic fallback OTP logged to server logs.';
   }
 }

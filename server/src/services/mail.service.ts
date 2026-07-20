@@ -1,12 +1,15 @@
 import nodemailer from 'nodemailer';
 
+const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER;
+const smtpPass = process.env.SMTP_PASS || process.env.EMAIL_PASS;
+
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
   port: parseInt(process.env.SMTP_PORT || '587'),
   secure: parseInt(process.env.SMTP_PORT || '587') === 465,
   auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS
+    user: smtpUser,
+    pass: smtpPass
   }
 });
 
@@ -39,7 +42,7 @@ export class MailService {
     `;
 
     await transporter.sendMail({
-      from: `"CIB Secure Portal" <${process.env.SMTP_USER}>`,
+      from: `"CIB Secure Portal" <${smtpUser}>`,
       to,
       subject: 'Classified Portal Access: One-Time Verification OTP',
       html
@@ -80,7 +83,7 @@ export class MailService {
     `;
 
     await transporter.sendMail({
-      from: `"CIB Secure Portal" <${process.env.SMTP_USER}>`,
+      from: `"CIB Secure Portal" <${smtpUser}>`,
       to,
       subject: 'Classified Portal Access: Welcome & Credentials',
       html

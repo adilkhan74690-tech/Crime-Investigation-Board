@@ -1,29 +1,43 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import { AuthService } from '../services/auth.service';
-import { formatResponse } from '../utils/apiResponse';
-import { asyncHandler } from '../utils/asyncHandler';
+import { formatResponse, formatError } from '../utils/apiResponse';
 import { logAudit } from '../utils/auditLogger';
 import { NotificationService } from '../services/notification.service';
 
 export class AuthController {
-  public static requestOtp = asyncHandler(async (req: AuthRequest, res: Response) => {
+  public static requestOtp = async (req: AuthRequest, res: Response) => {
     const { officerId, password } = req.body;
-    const result = await AuthService.requestOtp(officerId, password);
-    res.json(formatResponse(result));
-  });
+    console.log(`[AUTH LOG] requestOtp initiated for Officer ID: ${officerId}`);
+    try {
+      const result = await AuthService.requestOtp(officerId, password);
+      console.log(`[AUTH LOG] requestOtp SUCCESS for Officer ID: ${officerId}`);
+      return res.json(formatResponse(result));
+    } catch (err: any) {
+      console.error(`[AUTH LOG] requestOtp FAILED for Officer ID: ${officerId}. Error: ${err.stack || err.message}`);
+      const statusCode = err.statusCode || 500;
+      return res.status(statusCode).json(formatError(err.message || 'OTP dispatch failed.'));
+    }
+  };
 
-  public static changePassword = asyncHandler(async (req: AuthRequest, res: Response) => {
+  public static changePassword = async (req: AuthRequest, res: Response) => {
     const { officerId, oldPassword, newPassword } = req.body;
-    const msg = await AuthService.changePassword(officerId, oldPassword, newPassword);
-    
-    await NotificationService.createNotification(officerId, 'Password Changed: Security credentials updated.', 'Alert').catch(console.error);
-    
-    res.json(formatResponse({ message: msg }));
-  });
+    console.log(`[AUTH LOG] changePassword initiated for Officer ID: ${officerId}`);
+    try {
+      const msg = await AuthService.changePassword(officerId, oldPassword, newPassword);
+      await NotificationService.createNotification(officerId, 'Password Changed: Security credentials updated.', 'Alert').catch(console.error);
+      console.log(`[AUTH LOG] changePassword SUCCESS for Officer ID: ${officerId}`);
+      return res.json(formatResponse({ message: msg }));
+    } catch (err: any) {
+      console.error(`[AUTH LOG] changePassword FAILED for Officer ID: ${officerId}. Error: ${err.stack || err.message}`);
+      const statusCode = err.statusCode || 500;
+      return res.status(statusCode).json(formatError(err.message || 'Password update failed.'));
+    }
+  };
 
-  public static verifyOtp = asyncHandler(async (req: AuthRequest, res: Response) => {
+  public static verifyOtp = async (req: AuthRequest, res: Response) => {
     const { officerId, code } = req.body;
+    console.log(`[AUTH LOG] verifyOtp initiated for Officer ID: ${officerId}`);
     try {
       const result = await AuthService.verifyOtp(officerId, code);
       
@@ -39,8 +53,11 @@ export class AuthController {
       // Trigger dynamic notification
       await NotificationService.createNotification(officerId, 'OTP Login Success: Secure session initiated.', 'Info').catch(console.error);
 
-      res.json(formatResponse(result));
+      console.log(`[AUTH LOG] verifyOtp SUCCESS for Officer ID: ${officerId}`);
+      return res.json(formatResponse(result));
     } catch (err: any) {
+      console.error(`[AUTH LOG] verifyOtp FAILED for Officer ID: ${officerId}. Error: ${err.stack || err.message}`);
+      
       await logAudit(
         req,
         officerId,
@@ -50,30 +67,46 @@ export class AuthController {
       ).catch(console.error);
 
       await NotificationService.createNotification(officerId, 'OTP Failed: Dynamic code validation failed.', 'Alert').catch(console.error);
-      throw err;
+      
+      const statusCode = err.statusCode || 500;
+      return res.status(statusCode).json(formatError(err.message || 'OTP verification failed.'));
     }
-  });
+  };
 
-  public static resendOtp = asyncHandler(async (req: AuthRequest, res: Response) => {
+  public static resendOtp = async (req: AuthRequest, res: Response) => {
     const { officerId } = req.body;
-    const msg = await AuthService.resendOtp(officerId);
-    res.json(formatResponse({ message: msg }));
-  });
+    console.log(`[AUTH LOG] resendOtp initiated for Officer ID: ${officerId}`);
+    try {
+      const msg = await AuthService.resendOtp(officerId);
+      console.log(`[AUTH LOG] resendOtp SUCCESS for Officer ID: ${officerId}`);
+      return res.json(formatResponse({ message: msg }));
+    } catch (err: any) {
+      console.error(`[AUTH LOG] resendOtp FAILED for Officer ID: ${officerId}. Error: ${err.stack || err.message}`);
+      const statusCode = err.statusCode || 500;
+      return res.status(statusCode).json(formatError(err.message || 'OTP resend failed.'));
+    }
+  };
 
-  public static logout = asyncHandler(async (req: AuthRequest, res: Response) => {
+  public static logout = async (req: AuthRequest, res: Response) => {
     const officerId = req.user?.officerId;
     const role = req.user?.role;
-    
-    if (officerId) {
-      await logAudit(
-        req,
-        officerId,
-        role || null,
-        'Logout',
-        'Officer locked session / logged out.'
-      ).catch(console.error);
+    console.log(`[AUTH LOG] logout initiated for Officer ID: ${officerId}`);
+    try {
+      if (officerId) {
+        await logAudit(
+          req,
+          officerId,
+          role || null,
+          'Logout',
+          'Officer logged out.'
+        ).catch(console.error);
+      }
+      console.log(`[AUTH LOG] logout SUCCESS for Officer ID: ${officerId}`);
+      return res.json(formatResponse({ message: 'Session locked and logged out.' }));
+    } catch (err: any) {
+      console.error(`[AUTH LOG] logout FAILED for Officer ID: ${officerId}. Error: ${err.stack || err.message}`);
+      const statusCode = err.statusCode || 500;
+      return res.status(statusCode).json(formatError(err.message || 'Logout failed.'));
     }
-    
-    res.json(formatResponse({ message: 'Session locked and logged out.' }));
-  });
+  };
 }
