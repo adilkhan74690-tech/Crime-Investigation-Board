@@ -505,6 +505,7 @@ button, input, select, textarea {
   width: 72px;
 }
 .sidebar.collapsed .brand-name,
+.sidebar.collapsed .brand-subtitle,
 .sidebar.collapsed .brand-info,
 .sidebar.collapsed .sidebar-divider,
 .sidebar.collapsed .nav-text,
