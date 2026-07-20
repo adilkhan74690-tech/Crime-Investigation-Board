@@ -1383,6 +1383,36 @@ async function handleOfficerSubmit(event) {
   const department = document.getElementById('officer-form-department').value;
   const policeStation = document.getElementById('officer-form-station').value;
 
+  // Clear any existing highlighted invalid fields
+  const fields = ['name', 'email', 'phone', 'station'];
+  fields.forEach(f => {
+    const el = document.getElementById(`officer-form-${f}`);
+    if (el) el.style.borderColor = 'var(--border-color)';
+  });
+
+  let hasError = false;
+  if (!name.trim()) {
+    document.getElementById('officer-form-name').style.borderColor = 'var(--danger-color)';
+    hasError = true;
+  }
+  if (!email.trim() || !email.includes('@')) {
+    document.getElementById('officer-form-email').style.borderColor = 'var(--danger-color)';
+    hasError = true;
+  }
+  if (!phone.trim()) {
+    document.getElementById('officer-form-phone').style.borderColor = 'var(--danger-color)';
+    hasError = true;
+  }
+  if (!policeStation.trim()) {
+    document.getElementById('officer-form-station').style.borderColor = 'var(--danger-color)';
+    hasError = true;
+  }
+
+  if (hasError) {
+    triggerToast("Please correct highlighted fields before submitting.", "danger");
+    return;
+  }
+
   const token = sessionStorage.getItem('cib_jwt_token');
   const payload = { name, email, phone, role, rank, department, policeStation };
 
@@ -1406,9 +1436,13 @@ async function handleOfficerSubmit(event) {
     if (response.ok && result.success) {
       triggerToast(id ? "Officer updated successfully." : "Officer created successfully.", "success");
       hideModal('modal-officer-form');
+      document.getElementById('officer-form').reset();
       await renderOfficersList();
     } else {
       triggerToast(result.error || "Operation failed.", "danger");
+      if (result.error && result.error.toLowerCase().includes('email')) {
+        document.getElementById('officer-form-email').style.borderColor = 'var(--danger-color)';
+      }
     }
   } catch (err) {
     console.error(err);
