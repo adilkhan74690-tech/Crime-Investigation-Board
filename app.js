@@ -358,7 +358,6 @@ async function initDashboard() {
     }
   }
 
-  const activeId = sessionStorage.getItem('cib_officer_id') || 'SA-001';
   const activeRole = sessionStorage.getItem('cib_officer_role') || 'SUPER_ADMIN';
   
   // Find current officer avatar and name
