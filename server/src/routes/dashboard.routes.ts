@@ -143,4 +143,13 @@ router.post('/notifications/read-all', authenticateToken, asyncHandler(async (re
   res.json(formatResponse({ success: true }));
 }));
 
+// Endpoint: Delete a notification
+router.delete('/notifications/:id', authenticateToken, asyncHandler(async (req: any, res: any) => {
+  const { id } = req.params;
+  await prisma.notification.delete({
+    where: { id: parseInt(id) }
+  });
+  res.json(formatResponse({ success: true }, 'Notification deleted successfully.'));
+}));
+
 export default router;

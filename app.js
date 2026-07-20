@@ -2480,6 +2480,115 @@ async function syncNotificationsOnly() {
   }
 }
 
+let notificationPage = 1;
+const notificationPageSize = 5;
+
+function renderNotificationsDropdownContent(dropdown) {
+  let list = dropdown.querySelector('.notification-list-container');
+  if (!list) {
+    list = document.createElement('div');
+    list.className = 'notification-list-container';
+    list.style.overflowY = 'auto';
+    list.style.flexGrow = '1';
+    list.style.display = 'flex';
+    list.style.flexDirection = 'column';
+    dropdown.appendChild(list);
+  }
+  
+  let footer = dropdown.querySelector('.notification-footer-container');
+  if (!footer) {
+    footer = document.createElement('div');
+    footer.className = 'notification-footer-container';
+    dropdown.appendChild(footer);
+  }
+  
+  list.innerHTML = '';
+  const total = notifications.length;
+  
+  if (total === 0) {
+    list.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--text-secondary); font-size: 13px;">No notifications.</div>`;
+    footer.innerHTML = '';
+    return;
+  }
+  
+  const maxPage = Math.ceil(total / notificationPageSize);
+  if (notificationPage > maxPage) notificationPage = maxPage || 1;
+  if (notificationPage < 1) notificationPage = 1;
+  
+  const startIndex = (notificationPage - 1) * notificationPageSize;
+  const endIndex = startIndex + notificationPageSize;
+  const paginated = notifications.slice(startIndex, endIndex);
+  
+  paginated.forEach(n => {
+    const item = document.createElement('div');
+    item.style.padding = '12px 16px';
+    item.style.borderBottom = '1px solid rgba(75, 85, 99, 0.1)';
+    item.style.display = 'flex';
+    item.style.alignItems = 'center';
+    item.style.backgroundColor = n.isRead ? 'transparent' : 'rgba(37, 99, 235, 0.05)';
+    item.style.cursor = 'pointer';
+    item.onclick = () => {
+      if (!n.isRead) {
+        markNotificationAsRead(n.id);
+      }
+    };
+    
+    item.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+        <div style="flex-grow: 1; margin-right: 8px;">
+          <div style="font-size: 12px; color: ${n.isRead ? 'var(--text-secondary)' : '#FFF'}; font-weight: ${n.isRead ? '400' : '600'}; line-height: 1.4;">${n.message}</div>
+          <div style="font-size: 10px; color: var(--text-secondary); margin-top: 4px;">${new Date(n.timestamp).toLocaleString()}</div>
+        </div>
+        <button style="background: none; border: none; color: var(--danger-color); font-size: 14px; cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center;" onclick="event.stopPropagation(); deleteNotification(${n.id})" title="Delete Notification">
+          <i class="ri-delete-bin-line"></i>
+        </button>
+      </div>
+    `;
+    list.appendChild(item);
+  });
+  
+  footer.innerHTML = `
+    <div style="padding: 8px 16px; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background-color: var(--surface-color);">
+      <button style="background: none; border: none; color: var(--primary-color); font-size: 11px; cursor: pointer;" onclick="event.stopPropagation(); paginateNotifications('prev')">Prev</button>
+      <span style="font-size: 11px; color: var(--text-secondary);">${startIndex + 1} - ${Math.min(endIndex, total)} of ${total}</span>
+      <button style="background: none; border: none; color: var(--primary-color); font-size: 11px; cursor: pointer;" onclick="event.stopPropagation(); paginateNotifications('next')">Next</button>
+    </div>
+  `;
+}
+
+function paginateNotifications(direction) {
+  const total = notifications.length;
+  if (direction === 'prev' && notificationPage > 1) {
+    notificationPage--;
+  } else if (direction === 'next' && notificationPage * notificationPageSize < total) {
+    notificationPage++;
+  }
+  const dropdown = document.getElementById('notification-dropdown');
+  if (dropdown) {
+    renderNotificationsDropdownContent(dropdown);
+  }
+}
+
+async function deleteNotification(id) {
+  const token = sessionStorage.getItem('cib_jwt_token');
+  try {
+    const res = await fetch(`/api/dashboard/notifications/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (res.ok) {
+      notifications = notifications.filter(n => n.id !== id);
+      updateNotificationBell();
+      const dropdown = document.getElementById('notification-dropdown');
+      if (dropdown) {
+        renderNotificationsDropdownContent(dropdown);
+      }
+    }
+  } catch (err) {
+    console.error('[Notification Delete] Failed:', err);
+  }
+}
+
 async function showNotificationCenter() {
   const bell = document.querySelector('.notification-bell');
   if (!bell) return;
@@ -2519,38 +2628,7 @@ async function showNotificationCenter() {
   `;
   dropdown.appendChild(header);
 
-  const list = document.createElement('div');
-  list.style.overflowY = 'auto';
-  list.style.flexGrow = '1';
-  list.style.display = 'flex';
-  list.style.flexDirection = 'column';
-
-  if (notifications.length === 0) {
-    list.innerHTML = `<div style="padding: 24px; text-align: center; color: var(--text-secondary); font-size: 13px;">No notifications.</div>`;
-  } else {
-    notifications.forEach(n => {
-      const item = document.createElement('div');
-      item.style.padding = '12px 16px';
-      item.style.borderBottom = '1px solid rgba(75, 85, 99, 0.1)';
-      item.style.display = 'flex';
-      item.style.flexDirection = 'column';
-      item.style.gap = '4px';
-      item.style.cursor = 'pointer';
-      item.style.backgroundColor = n.isRead ? 'transparent' : 'rgba(37, 99, 235, 0.05)';
-      item.onclick = () => {
-        if (!n.isRead) {
-          markNotificationAsRead(n.id);
-        }
-      };
-
-      item.innerHTML = `
-        <div style="font-size: 12px; color: ${n.isRead ? 'var(--text-secondary)' : '#FFF'}; font-weight: ${n.isRead ? '400' : '600'};">${n.message}</div>
-        <div style="font-size: 10px; color: var(--text-secondary);">${new Date(n.timestamp).toLocaleString()}</div>
-      `;
-      list.appendChild(item);
-    });
-  }
-  dropdown.appendChild(list);
+  renderNotificationsDropdownContent(dropdown);
   
   bell.appendChild(dropdown);
   notificationDropdownOpen = true;
@@ -2725,6 +2803,8 @@ function renderSubInspectorRegistries() {
 window.showNotificationCenter = showNotificationCenter;
 window.markAllNotificationsRead = markAllNotificationsRead;
 window.markNotificationAsRead = markNotificationAsRead;
+window.paginateNotifications = paginateNotifications;
+window.deleteNotification = deleteNotification;
 window.renderDepartmentsRegistry = renderDepartmentsRegistry;
 window.renderSubInspectorRegistries = renderSubInspectorRegistries;
 
