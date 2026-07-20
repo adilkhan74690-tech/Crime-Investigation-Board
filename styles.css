@@ -1517,6 +1517,14 @@ body.modal-open {
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
   transform: translateY(20px);
   transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+.modal-container form {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .modal-overlay.active .modal-container {
