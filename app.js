@@ -2433,13 +2433,13 @@ function connectSocket(userId) {
   socket.on('notification', (data) => {
     console.log('[Socket.IO] Received personal notification:', data);
     triggerToast(data.message, data.type === 'Alert' ? 'danger' : 'success');
-    syncNotificationsOnly();
+    initDashboard();
   });
 
   socket.on('global-notification', (data) => {
     console.log('[Socket.IO] Received global notification:', data);
     triggerToast(data.message, data.type === 'Alert' ? 'danger' : 'success');
-    syncNotificationsOnly();
+    initDashboard();
   });
 
   socket.on('role-notification', (data) => {
@@ -2447,7 +2447,7 @@ function connectSocket(userId) {
     if (data.role === myRole) {
       console.log('[Socket.IO] Received role notification:', data);
       triggerToast(data.message, data.type === 'Alert' ? 'danger' : 'success');
-      syncNotificationsOnly();
+      initDashboard();
     }
   });
 }
