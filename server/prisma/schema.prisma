@@ -58,28 +58,28 @@ enum NotificationType {
 }
 
 enum CrimeCategory {
-  GrandLarceny    @map("Grand Larceny")
-  OrganizedCrime  @map("Organized Crime")
-  Homicide        @map("Homicide")
-  Cybercrime      @map("Cybercrime")
-  FinancialCrime  @map("Financial Crime")
-  Other           @map("Other")
+  GrandLarceny   @map("Grand Larceny")
+  OrganizedCrime @map("Organized Crime")
+  Homicide       @map("Homicide")
+  Cybercrime     @map("Cybercrime")
+  FinancialCrime @map("Financial Crime")
+  Other          @map("Other")
 }
 
 model User {
-  id                     String            @id @default(uuid())
-  email                  String            @unique
+  id                     String           @id @default(uuid())
+  email                  String           @unique
   password               String
   name                   String
   role                   Role
   department             Department
-  isActive               Boolean           @default(true)
-  passwordChangeRequired Boolean           @default(false)
+  isActive               Boolean          @default(true)
+  passwordChangeRequired Boolean          @default(false)
   phone                  String?
   policeStation          String?
   lastLogin              DateTime?
-  createdAt              DateTime          @default(now())
-  updatedAt              DateTime          @updatedAt
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
   officer                Officer?
   auditLogs              AuditLog[]
   activityLogs           ActivityLog[]
@@ -88,19 +88,19 @@ model User {
 }
 
 model Officer {
-  id               String                   @id // Maps to User id
-  user             User                     @relation(fields: [id], references: [id], onDelete: Cascade)
+  id               String                  @id // Maps to User id
+  user             User                    @relation(fields: [id], references: [id], onDelete: Cascade)
   rank             OfficerRank
-  assignedCases    Int                      @default(0)
-  solvedCases      Int                      @default(0)
-  performanceScore Int                      @default(100)
-  availability     String                   @default("On Duty")
+  assignedCases    Int                     @default(0)
+  solvedCases      Int                     @default(0)
+  performanceScore Int                     @default(100)
+  availability     String                  @default("On Duty")
   avatar           String?
   cases            Case[]
   firs             Fir[]
   assignments      CaseAssignmentHistory[]
-  createdAt        DateTime                 @default(now())
-  updatedAt        DateTime                 @updatedAt
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
 }
 
 model Case {
@@ -178,23 +178,23 @@ model Witness {
 }
 
 model Evidence {
-  id                    String             @id @default(uuid())
-  caseId                String
-  case                  Case               @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  name                  String
-  category              EvidenceType
-  collectionDate        DateTime           @default(now())
-  collectedBy           String
-  verificationStatus    String
-  previewType           String
-  previewData           String
-  cloudinaryPublicId    String?
-  cloudinaryUrl         String?
-  cloudinaryFormat      String?
+  id                     String             @id @default(uuid())
+  caseId                 String
+  case                   Case               @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  name                   String
+  category               EvidenceType
+  collectionDate         DateTime           @default(now())
+  collectedBy            String
+  verificationStatus     String
+  previewType            String
+  previewData            String
+  cloudinaryPublicId     String?
+  cloudinaryUrl          String?
+  cloudinaryFormat       String?
   cloudinaryResourceType String?
-  transfers             EvidenceTransfer[]
-  createdAt             DateTime           @default(now())
-  updatedAt             DateTime           @updatedAt
+  transfers              EvidenceTransfer[]
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
 }
 
 model EvidenceTransfer {
@@ -209,16 +209,16 @@ model EvidenceTransfer {
 }
 
 model ForensicReport {
-  id           String    @id @default(uuid())
+  id           String   @id @default(uuid())
   caseId       String
-  case         Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  case         Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
   type         String
   analyst      String
   status       String
   summary      String
   approvalDate String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 model Timeline {
