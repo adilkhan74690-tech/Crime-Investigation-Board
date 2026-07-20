@@ -902,7 +902,7 @@ button, input, select, textarea {
   margin-bottom: calc(var(--grid-unit) * 4);
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1280px) {
   .charts-grid {
     grid-template-columns: 1fr;
   }
@@ -936,7 +936,9 @@ button, input, select, textarea {
   background-color: var(--surface-color);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  overflow-x: auto;
+  max-width: 100%;
+  width: 100%;
   margin-bottom: calc(var(--grid-unit) * 4);
 }
 
@@ -1166,7 +1168,7 @@ button, input, select, textarea {
   gap: calc(var(--grid-unit) * 4);
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1280px) {
   .evidence-page-layout {
     grid-template-columns: 1fr;
   }
@@ -1367,20 +1369,6 @@ button, input, select, textarea {
 
 /* Tablets (Portrait & Landscape: 768px - 1024px) */
 @media (max-width: 1024px) {
-  .sidebar {
-    width: 72px;
-  }
-  .sidebar .brand-name,
-  .sidebar .nav-text,
-  .sidebar .btn-lock span {
-    display: none;
-  }
-  .sidebar-header {
-    justify-content: center;
-  }
-  .collapse-btn {
-    display: none;
-  }
   .data-table-container {
     overflow-x: auto;
   }
