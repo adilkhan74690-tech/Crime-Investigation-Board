@@ -100,14 +100,26 @@ window.addEventListener('DOMContentLoaded', () => {
 
 function getAvatarSvg(name) {
   const colors = ['#2563EB', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4'];
-  const nameStr = name || 'User';
-  const char = nameStr.charAt(0).toUpperCase();
+  const nameStr = (name || 'User').trim();
+  
+  // Extract initials (Adil Khan -> AK, Rahul -> R)
+  const parts = nameStr.split(/\s+/);
+  let initials = '';
+  if (parts.length > 0) {
+    initials += parts[0].charAt(0).toUpperCase();
+    if (parts.length > 1) {
+      initials += parts[parts.length - 1].charAt(0).toUpperCase();
+    }
+  }
+  
+  // Deterministic color selection
   let codeSum = 0;
   for (let i = 0; i < nameStr.length; i++) codeSum += nameStr.charCodeAt(i);
   const color = colors[codeSum % colors.length];
+  
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
     <circle cx="32" cy="32" r="32" fill="${color}" />
-    <text x="50%" y="55%" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif" font-size="28" font-weight="bold" fill="#ffffff">${char}</text>
+    <text x="50%" y="50%" text-anchor="middle" dominant-baseline="central" font-family="'Inter', sans-serif" font-size="${initials.length > 1 ? '22' : '28'}" font-weight="bold" fill="#ffffff">${initials}</text>
   </svg>`;
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
