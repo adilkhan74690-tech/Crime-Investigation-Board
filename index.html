@@ -1,0 +1,1669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CIB - Crime Investigation Board</title>
+  <meta name="description" content="Secure internal investigation management platform for law enforcement agencies. Manage criminal cases, evidence logs, forensics workflows, and analytics.">
+  <link rel="icon" type="image/png" href="assets/CIB.png">
+  <link rel="stylesheet" href="styles.css">
+  <!-- Remix Icons for high-quality enterprise micro icons -->
+  <link href="https://cdn.jsdelivr.net/npm/remixicon@3.5.0/fonts/remixicon.css" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Socket.IO Client -->
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <!-- ApexCharts Library -->
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+</head>
+<body>
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- AUTHENTICATION LAYER -->
+  <div id="auth-screen" class="auth-layout">
+    <div class="auth-left-panel">
+      <div class="brand-showcase">
+        <h1 class="brand-headline">Crime Investigation Board</h1>
+        
+        <p class="brand-subtitle">Manage investigations, officer operations, digital evidence and secure case workflows through a centralized internal platform.</p>
+        
+        <div class="brand-divider"></div>
+        
+        <div class="feature-bullets">
+          <div class="feature-item">
+            <i data-lucide="briefcase"></i>
+            <span>Case Management</span>
+          </div>
+          <div class="feature-item">
+            <i data-lucide="users"></i>
+            <span>Officer Management</span>
+          </div>
+          <div class="feature-item">
+            <i data-lucide="folder"></i>
+            <span>Digital Evidence Repository</span>
+          </div>
+          <div class="feature-item">
+            <i data-lucide="link"></i>
+            <span>Chain of Custody Tracking</span>
+          </div>
+          <div class="feature-item">
+            <i data-lucide="clipboard-list"></i>
+            <span>Audit & Activity Logs</span>
+          </div>
+        </div>
+        
+        <div class="brand-divider"></div>
+
+        <div class="auth-footer-text">
+          <strong>Crime Investigation Board (CIB)</strong>
+          <span>Internal Investigation Platform</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Login Form Panel -->
+    <div class="auth-right-panel">
+      <!-- Subtle Gradient Border/Divider -->
+      <div class="auth-panel-divider"></div>
+      
+      <div class="glass-login-card">
+        <h2 class="login-card-title">Secure Portal Login</h2>
+        <p class="login-card-desc">Sign in with your Officer ID and password to access the Crime Investigation Board portal.</p>
+
+        <form id="auth-form" onsubmit="handleLogin(event)">
+          <div class="form-group">
+            <label class="form-label" for="officer-id">OFFICER ID / EMAIL</label>
+            <div class="input-with-icon-wrapper">
+              <input type="text" id="officer-id" class="form-input" placeholder="e.g. SA-001" required>
+              <i class="ri-user-line"></i>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="password">SECURITY PASSWORD</label>
+            <div class="input-with-icon-wrapper">
+              <input type="password" id="password" class="form-input" placeholder="••••••••" required>
+              <i class="ri-lock-line"></i>
+            </div>
+          </div>
+
+          <div id="otp-form-group" class="form-group" style="display: none;">
+            <label class="form-label">DYNAMIC OTP CODE</label>
+            <div class="otp-container">
+              <input type="text" maxlength="1" class="otp-box form-input">
+              <input type="text" maxlength="1" class="otp-box form-input">
+              <input type="text" maxlength="1" class="otp-box form-input">
+              <input type="text" maxlength="1" class="otp-box form-input">
+              <input type="text" maxlength="1" class="otp-box form-input">
+              <input type="text" maxlength="1" class="otp-box form-input">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <label class="checkbox-label">
+              <input type="checkbox" id="remember-device" checked> Remember Device
+            </label>
+            <a href="#" class="forgot-link" onclick="triggerToast('Reset instructions sent to registered officer device.', 'success')">Forgot Password?</a>
+          </div>
+
+          <button type="submit" id="auth-submit-btn" class="btn-primary">
+            <i class="ri-loader-4-line spinner" id="auth-submit-spinner" style="display: none;"></i>
+            <i class="ri-lock-line" id="auth-submit-lock"></i>
+            <span id="auth-submit-text">Access CIB Portal</span>
+          </button>
+          
+          <div class="security-info">
+            <i class="ri-lock-line"></i> Secured with JWT Authentication & Role-Based Access Control
+          </div>
+        </form>
+
+        <div class="classified-footer">
+          <i class="ri-shield-line"></i> Classified System // Law Enforcement Only
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Master Application View -->
+  <div id="app-workspace" class="app-layout" style="display: none;">
+    <!-- Collapsible Sidebar -->
+    <aside id="sidebar-menu" class="sidebar">
+      <div class="sidebar-header" style="border-bottom: none;">
+        <a href="#" class="brand" style="display: flex; align-items: center; gap: 12px; text-decoration: none;">
+          <div style="width: 44px; height: 44px; background-color: var(--border-light); border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; border: 1px solid var(--border-color); flex-shrink: 0;">
+            <img src="assets/CIB.png" alt="CIB Icon" style="width: 32px; height: 32px; object-fit: contain;">
+          </div>
+          <div class="brand-info" style="display: flex; flex-direction: column; align-items: flex-start;">
+            <span class="brand-name" style="font-size: 16px; font-weight: 700; color: #FFFFFF; line-height: 1.2;">CIB Portal</span>
+            <span class="brand-subtitle" style="font-size: 10px; color: var(--text-secondary); font-weight: 500; letter-spacing: 0.5px; white-space: nowrap;">Crime Investigation Board</span>
+          </div>
+        </a>
+        <button class="collapse-btn" onclick="toggleSidebar()"><i class="ri-menu-fold-line" id="collapse-icon"></i></button>
+      </div>
+      <div class="sidebar-divider" style="height: 1px; background-color: var(--border-color); margin: 0 20px 12px 20px;"></div>
+
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item active" data-view="dashboard" onclick="switchView('dashboard')">
+          <i class="ri-dashboard-line"></i> <span class="nav-text">Dashboard</span>
+        </a>
+        <a href="#" class="nav-item" data-view="room" onclick="switchView('room')">
+          <i class="ri-radar-line"></i> <span class="nav-text">Investigation Room</span>
+        </a>
+        <a href="#" class="nav-item" data-view="cases" onclick="switchView('cases')">
+          <i class="ri-folder-shield-2-line"></i> <span class="nav-text">Cases</span>
+        </a>
+        <a href="#" class="nav-item" data-view="evidence" onclick="switchView('evidence')">
+          <i class="ri-bubble-chart-line"></i> <span class="nav-text">Evidence</span>
+        </a>
+        <a href="#" class="nav-item" data-view="timeline" onclick="switchView('timeline')">
+          <i class="ri-git-commit-line"></i> <span class="nav-text">Timeline</span>
+        </a>
+        <a href="#" class="nav-item" data-view="forensics" onclick="switchView('forensics')">
+          <i class="ri-microscope-line"></i> <span class="nav-text">Forensics</span>
+        </a>
+        <a href="#" class="nav-item" data-view="officers" onclick="switchView('officers')">
+          <i class="ri-user-shared-line"></i> <span class="nav-text">Officers</span>
+        </a>
+        <a href="#" class="nav-item" data-view="reports" onclick="switchView('reports')">
+          <i class="ri-file-chart-line"></i> <span class="nav-text">Reports</span>
+        </a>
+        <a href="#" class="nav-item" data-view="analytics" onclick="switchView('analytics')">
+          <i class="ri-bar-chart-grouped-line"></i> <span class="nav-text">Analytics</span>
+        </a>
+        <a href="#" class="nav-item" data-view="settings" onclick="switchView('settings')">
+          <i class="ri-settings-4-line"></i> <span class="nav-text">Settings</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button class="btn-lock" onclick="handleLogout()"><i class="ri-lock-2-line"></i> <span>Lock Session</span></button>
+      </div>
+    </aside>
+
+    <!-- Main Workspace wrapper -->
+    <div class="main-wrapper">
+      <!-- Top Navigation bar -->
+      <header class="navbar">
+        <div class="nav-left">
+          <button class="collapse-btn mobile-menu-btn" onclick="toggleSidebar()" style="display: none; padding: 12px; margin-right: 8px;"><i class="ri-menu-2-line"></i></button>
+          <div class="search-box">
+            <i class="ri-search-line"></i>
+            <input type="text" placeholder="Global Search cases, evidence, agents..." oninput="triggerGlobalSearch(this.value)">
+          </div>
+        </div>
+
+        <div class="nav-right">
+          <div class="system-status">
+            <span class="status-dot"></span> SECURE LINK
+          </div>
+          <div class="date-display" id="live-date">2026-07-19</div>
+          
+          <div class="notification-bell" onclick="showNotificationCenter()">
+            <i class="ri-notification-3-line"></i>
+            <span class="bell-badge"></span>
+          </div>
+
+          <div class="user-profile">
+            <img src="" alt="Officer Photo" class="user-avatar" id="navbar-avatar">
+            <div class="user-info">
+              <span class="user-name" id="navbar-username">Officer Name</span>
+              <span class="user-rank" id="navbar-rank">Supervisory SSA</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- View Containers -->
+
+      <!-- 0. INVESTIGATION ROOM VIEW -->
+      <main id="view-room" class="page-container">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Investigation Command Room</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Tactical overview, suspect connections, crime scene visualizer, and dynamic evidence mapping.</p>
+          </div>
+          <div class="page-actions" style="gap: 12px; align-items: center;">
+            <span style="font-size:13px; color:var(--text-secondary);">Focus Case:</span>
+            <select class="filter-select" id="room-case-selector" onchange="loadRoomCase(this.value)">
+              <!-- Loaded dynamically -->
+            </select>
+          </div>
+        </div>
+
+        <!-- Command Center Layout Grid -->
+        <div style="display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 24px; min-height: 580px;">
+          <!-- Left Panel: Case Timeline -->
+          <div class="chart-card" style="display:flex; flex-direction:column; overflow:hidden;">
+            <h3 style="font-size:14px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:16px; border-bottom:1px solid var(--border-color); padding-bottom:8px;">
+              <i class="ri-history-line"></i> Case Workflow
+            </h3>
+            <div id="room-timeline" class="timeline-workflow" style="overflow-y:auto; flex-grow:1; max-height: 480px;">
+              <!-- Loaded dynamically -->
+            </div>
+          </div>
+
+          <!-- Center Panel: Crime Scene, Connections & Interactive Canvas -->
+          <div style="display:flex; flex-direction:column; gap:24px;">
+            <!-- Interactive Map / Connection Board -->
+            <div class="chart-card" style="flex-grow:1; display:flex; flex-direction:column; position:relative;">
+              <h3 style="font-size:14px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:16px; border-bottom:1px solid var(--border-color); padding-bottom:8px;">
+                <i class="ri-node-tree"></i> Connection & Evidence Map
+              </h3>
+              <!-- Graphical Connection Board SVG Canvas representation -->
+              <div id="room-connection-board" style="flex-grow:1; min-height: 320px; background-color:#0D1525; border-radius:var(--radius-md); border: 1px dashed var(--border-light); position:relative; overflow:hidden;">
+                <!-- Connections Map will load SVG nodes dynamically -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Panel: Info Hub -->
+          <div style="display:flex; flex-direction:column; gap:24px;">
+            <!-- Case Notes -->
+            <div class="chart-card">
+              <h3 style="font-size:14px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:12px; border-bottom:1px solid var(--border-color); padding-bottom:8px;">
+                <i class="ri-sticky-note-line"></i> Command Notes
+              </h3>
+              <textarea class="form-input" id="room-notes" rows="4" style="font-size:12px; line-height:1.5; background-color: var(--card-color); border-color: var(--border-color); resize:none;" readonly></textarea>
+            </div>
+            <!-- Officer Activities -->
+            <div class="chart-card" style="flex-grow:1; display:flex; flex-direction:column; overflow:hidden;">
+              <h3 style="font-size:14px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:12px; border-bottom:1px solid var(--border-color); padding-bottom:8px;">
+                <i class="ri-folder-user-line"></i> Task Status
+              </h3>
+              <div id="room-activities" style="overflow-y:auto; flex-grow:1; display:flex; flex-direction:column; gap:12px;">
+                <!-- Loaded dynamically -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- 1. DASHBOARD VIEW -->
+      <main id="view-sa-dashboard" class="page-container active">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Executive Board Overview</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Crime Investigation & Active Incident Management System</p>
+          </div>
+          <div class="page-actions">
+            <button class="btn-primary" style="width: auto; padding: 10px 16px;" onclick="switchView('cases')"><i class="ri-add-line"></i> Manage Cases</button>
+          </div>
+        </div>
+
+        <!-- Metric Statistics -->
+        <div class="stats-grid" style="gap: 24px; margin-bottom: 32px;">
+          <div class="stat-card" style="box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25); border: 1px solid var(--border-light); padding: 24px;">
+            <div class="stat-info">
+              <span class="stat-label" style="font-size: 11px; color: var(--text-secondary); letter-spacing: 0.05em;">Active Investigations</span>
+              <span class="stat-val" id="count-active" style="font-size: 32px; font-weight: 700; margin: 8px 0 4px;">--</span>
+              <span class="stat-trend trend-up" style="color: var(--success-color); font-size: 12px; display: flex; align-items: center; gap: 4px;">
+                <i class="ri-arrow-up-line"></i> +12.4% <span style="color: var(--text-secondary);">vs last month</span>
+              </span>
+            </div>
+            <div class="stat-icon" style="background-color: rgba(37, 99, 235, 0.1); color: var(--primary-color); width: 48px; height: 48px; border-radius: 8px;"><i class="ri-radar-line"></i></div>
+          </div>
+          <div class="stat-card solved" style="box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25); border: 1px solid var(--border-light); padding: 24px;">
+            <div class="stat-info">
+              <span class="stat-label" style="font-size: 11px; color: var(--text-secondary); letter-spacing: 0.05em;">Resolved Cases</span>
+              <span class="stat-val" id="count-solved" style="font-size: 32px; font-weight: 700; margin: 8px 0 4px;">--</span>
+              <span class="stat-trend trend-up" style="color: var(--success-color); font-size: 12px; display: flex; align-items: center; gap: 4px;">
+                <i class="ri-arrow-up-line"></i> +8.2% <span style="color: var(--text-secondary);">audit rate</span>
+              </span>
+            </div>
+            <div class="stat-icon" style="background-color: rgba(16, 185, 129, 0.1); color: var(--success-color); width: 48px; height: 48px; border-radius: 8px;"><i class="ri-shield-check-line"></i></div>
+          </div>
+          <div class="stat-card" style="box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25); border: 1px solid var(--border-light); padding: 24px;">
+            <div class="stat-info">
+              <span class="stat-label" style="font-size: 11px; color: var(--text-secondary); letter-spacing: 0.05em;">Secured Evidence</span>
+              <span class="stat-val" id="count-evidence" style="font-size: 32px; font-weight: 700; margin: 8px 0 4px;">--</span>
+              <span class="stat-trend" style="color: var(--text-secondary); font-size: 12px; display: flex; align-items: center; gap: 4px;">
+                <i class="ri-lock-line"></i> Lock Verifiable
+              </span>
+            </div>
+            <div class="stat-icon" style="background-color: rgba(245, 158, 11, 0.1); color: var(--warning-color); width: 48px; height: 48px; border-radius: 8px;"><i class="ri-archive-line"></i></div>
+          </div>
+          <div class="stat-card priority" style="box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25); border: 1px solid var(--border-light); padding: 24px;">
+            <div class="stat-info">
+              <span class="stat-label" style="font-size: 11px; color: var(--text-secondary); letter-spacing: 0.05em;">Critical Focus</span>
+              <span class="stat-val" id="count-priority" style="font-size: 32px; font-weight: 700; margin: 8px 0 4px;">--</span>
+              <span class="stat-trend" style="color: var(--danger-color); font-size: 12px; display: flex; align-items: center; gap: 4px; font-weight: 600;">
+                <i class="ri-alarm-warning-line"></i> Immediate Review
+              </span>
+            </div>
+            <div class="stat-icon" style="background-color: rgba(239, 68, 68, 0.1); color: var(--danger-color); width: 48px; height: 48px; border-radius: 8px;"><i class="ri-error-warning-line"></i></div>
+          </div>
+        </div>
+
+        <!-- ApexCharts Section -->
+        <div class="charts-grid">
+          <!-- Line Trend Chart -->
+          <div class="chart-card">
+            <div class="chart-header">
+              <span>Monthly Investigation Trend (Resolved vs Incidents)</span>
+            </div>
+            <div class="chart-body" id="trend-chart-container" style="display: block;">
+              <!-- ApexChart render target -->
+            </div>
+          </div>
+
+          <!-- Pie / Bar Category breakdown -->
+          <div class="chart-card">
+            <div class="chart-header">Crime Breakdown</div>
+            <div class="chart-body" id="breakdown-chart-container" style="display: block;">
+              <!-- ApexChart render target -->
+            </div>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+          <!-- Tasks Checklist -->
+          <div class="chart-card">
+            <div class="chart-header">Today's Tasks</div>
+            <div id="todo-list" style="display: flex; flex-direction: column; gap: 12px;">
+              <!-- Loaded dynamically -->
+            </div>
+          </div>
+
+          <!-- Recent Activity Log -->
+          <div class="chart-card">
+            <div class="chart-header">Recent Activity Log</div>
+            <div id="recent-activities" style="display: flex; flex-direction: column; gap: 16px;">
+              <!-- Loaded dynamically -->
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- 2. CASES VIEW -->
+      <main id="view-sa-cases" class="page-container">
+        <div class="page-header" style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <h2 class="page-title">Case Management</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Review and manage active criminal investigation board cases</p>
+          </div>
+          <button id="btn-register-fir" class="btn-primary" onclick="showRegisterFirModal()" style="display: none; align-items: center; gap: 8px; width: auto; padding: 10px 20px; font-size: 13px;">
+            <i class="ri-file-add-line"></i> Register FIR & Case
+          </button>
+        </div>
+
+        <div class="data-table-container">
+          <div class="table-filter-bar">
+            <span style="font-size: 13px; font-weight: 500;">Filters:</span>
+            <select class="filter-select" id="filter-priority" onchange="filterCases()">
+              <option value="All">Priority: All</option>
+              <option value="Critical">Critical</option>
+              <option value="High">High</option>
+              <option value="Medium">Medium</option>
+            </select>
+
+            <select class="filter-select" id="filter-status" onchange="filterCases()">
+              <option value="All">Status: All</option>
+              <option value="Active">Active</option>
+              <option value="Solved">Solved</option>
+            </select>
+          </div>
+
+          <table class="enterprise-table">
+            <thead>
+              <tr>
+                <th>Case ID</th>
+                <th>Title / Crime Type</th>
+                <th>Priority</th>
+                <th>Assigned Officer</th>
+                <th>Location</th>
+                <th>Status</th>
+                <th>Last Updated</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="cases-table-body">
+              <!-- Loaded dynamically -->
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination-bar" style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; margin-bottom: 16px; font-size: 13px; color: var(--text-secondary);">
+          <div>
+            Showing <span id="cases-pagination-range">--</span> of <span id="cases-pagination-total">--</span> cases
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-primary" style="width: auto; padding: 6px 12px; font-size: 12px; background-color: var(--border-light);" onclick="paginateCases('prev')">Previous</button>
+            <button class="btn-primary" style="width: auto; padding: 6px 12px; font-size: 12px; background-color: var(--border-light);" onclick="paginateCases('next')">Next</button>
+          </div>
+        </div>
+
+        <!-- Case Detail Overlay Workspace (Initially Hidden) -->
+        <div id="case-details-section" style="display: none; background-color: var(--surface-color); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 24px; margin-top: 24px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 16px; margin-bottom: 20px;">
+            <h3 id="detail-case-title" style="font-size: 18px; font-weight: 700;">Case details</h3>
+            <button class="btn-primary" style="padding: 6px 12px; font-size: 12px; width: auto;" onclick="closeCaseDetail()">Close Workspace</button>
+          </div>
+
+          <!-- Workspace Tabs -->
+          <div class="detail-tabs">
+            <button class="tab-btn active" onclick="switchDetailTab('overview')">Overview</button>
+            <button class="tab-btn" onclick="switchDetailTab('timeline-tab')">Investigation Timeline</button>
+            <button class="tab-btn" onclick="switchDetailTab('evidence-tab')">Evidence logs</button>
+            <button class="tab-btn" onclick="switchDetailTab('witnesses')">Witness Statements</button>
+          </div>
+
+          <!-- Tab Content Views -->
+          <div id="tab-overview" class="tab-content active">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+              <div>
+                <span style="display:block; font-size:12px; color: var(--text-secondary); text-transform: uppercase;">Victim / Target Target</span>
+                <strong id="detail-victim" style="font-size: 15px; margin-top: 4px; display:block;">--</strong>
+              </div>
+              <div>
+                <span style="display:block; font-size:12px; color: var(--text-secondary); text-transform: uppercase;">Primary Suspects</span>
+                <strong id="detail-suspects" style="font-size: 15px; margin-top: 4px; display:block;">--</strong>
+              </div>
+            </div>
+            <div style="margin-top: 24px;">
+              <span style="display:block; font-size:12px; color: var(--text-secondary); text-transform: uppercase;">Case Officer Notes</span>
+              <p id="detail-notes" style="font-size: 14px; margin-top: 8px; line-height: 1.6; color: var(--text-secondary);"></p>
+            </div>
+            <div id="case-actions-panel" style="margin-top: 24px; border-top: 1px solid var(--border-color); padding-top: 20px;">
+              <span style="display:block; font-size:12px; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 12px; font-weight: 600;">Classified Action Controls</span>
+              <div id="case-actions-container" style="display: flex; gap: 12px; flex-wrap: wrap;">
+                <!-- Dynamically loaded based on active role -->
+              </div>
+            </div>
+          </div>
+
+          <div id="tab-timeline-tab" class="tab-content">
+            <div id="detail-timeline" class="timeline-workflow">
+              <!-- Timeline nodes -->
+            </div>
+          </div>
+
+          <div id="tab-evidence-tab" class="tab-content">
+            <div id="detail-evidence-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px;">
+              <!-- Evidence items loaded dynamically -->
+            </div>
+          </div>
+
+          <div id="tab-witnesses" class="tab-content">
+            <div id="detail-witnesses" style="display: flex; flex-direction: column; gap: 12px;">
+              <!-- Loaded dynamically -->
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- 3. EVIDENCE VIEW -->
+      <main id="view-io-evidence" class="page-container">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Evidence Vault</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Secure digital tracking of forensic evidence artifacts & file chain-of-custody logs</p>
+          </div>
+        </div>
+
+        <!-- Drag and Drop Upload -->
+        <div class="upload-zone" style="margin-bottom: 24px;" onclick="triggerToast('Secure upload pipeline initiated. Standard virus scanning starting...', 'success')">
+          <i class="ri-upload-cloud-2-line" style="font-size: 32px; color: var(--primary-color); display:block; margin-bottom: 8px;"></i>
+          <strong>Drag and drop crime scene files here</strong>
+          <span style="display:block; font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Supports secure images, ballistic scans, audio waveforms, or DNA files (AES-GCM-256 encrypted on ingest)</span>
+        </div>
+
+        <div class="evidence-page-layout">
+          <!-- Evidence Grid -->
+          <div class="evidence-grid" id="evidence-grid-container">
+            <!-- Loaded dynamically -->
+          </div>
+
+          <!-- Analysis Detail Panel -->
+          <div class="evidence-preview-box" style="background-color: var(--surface-color); border:1px solid var(--border-color); padding: 24px; border-radius: var(--radius-lg);">
+            <h3 style="font-size: 15px; font-weight:600; margin-bottom: 16px; border-bottom:1px solid var(--border-color); padding-bottom:12px;">Item Forensic Diagnostic</h3>
+            <div id="evidence-preview-graphic" class="evidence-graphic" style="height: 180px; overflow:hidden; border-radius:var(--radius-md);">
+              Select an evidence file from the grid to run matching logic and trace custody.
+            </div>
+            
+            <div style="margin-top: 24px;">
+              <span style="font-size: 12px; color: var(--text-secondary); text-transform: uppercase; font-weight:600; display: block; margin-bottom: 12px;">Transfer & Custody History</span>
+              <div id="evidence-custody-chain" class="custody-chain">
+                <!-- Loaded dynamically -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- 4. TIMELINE VIEW -->
+      <main id="view-io-timeline" class="page-container">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Master Investigation Timeline</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Select an active case below to trace the complete legal chain-of-custody and investigative logs</p>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 32px;">
+          <div class="data-table-container">
+            <table class="enterprise-table">
+              <thead>
+                <tr>
+                  <th>Case ID</th>
+                  <th>Title</th>
+                  <th>Trace</th>
+                </tr>
+              </thead>
+              <tbody id="timeline-case-selector">
+                <!-- Loaded dynamically -->
+              </tbody>
+            </table>
+          </div>
+
+          <div class="chart-card">
+            <h3 style="font-size:16px; margin-bottom: 20px;" id="timeline-focused-case-title">Select a Case</h3>
+            <div id="master-timeline-workflow" class="timeline-workflow">
+              <!-- Rendered timeline -->
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- 5. FORENSICS VIEW -->
+      <main id="view-fo-pending" class="page-container">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Forensic Lab Workspaces</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">DNA Swabs, Fingerprint Matches, Autopsies, Ballistic Scans & Chemical Analyses</p>
+          </div>
+        </div>
+
+        <div class="forensics-grid" id="forensics-grid-container">
+          <!-- Loaded dynamically -->
+        </div>
+
+        <div class="chart-card" style="margin-top: 32px;">
+          <h3 style="font-size: 16px; margin-bottom: 16px;">Upload Forensic Report Findings</h3>
+          <form onsubmit="handleForensicUpload(event)" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div class="form-group">
+              <label class="form-label">Related Case</label>
+              <select class="form-input" id="forenic-upload-case" required>
+                <option value="CASE-2026-081">CASE-2026-081 (Midnight Syndicate Heist)</option>
+                <option value="CASE-2026-102">CASE-2026-102 (Holloway Warehouse Homicide)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Analysis Type</label>
+              <select class="form-input" id="forenic-upload-type" required>
+                <option>Fingerprint Verification</option>
+                <option>DNA Profile Swab Match</option>
+                <option>Ballistics Striation Scan</option>
+                <option>Autopsy Toxicology Report</option>
+              </select>
+            </div>
+            <div class="form-group" style="grid-column: span 2;">
+              <label class="form-label">Summary Findings</label>
+              <textarea class="form-input" id="forensic-upload-summary" rows="3" placeholder="Enter formal analysis findings and database match logs..." required></textarea>
+            </div>
+            <div style="grid-column: span 2; display: flex; justify-content: flex-end;">
+              <button type="submit" class="btn-primary" style="width: auto;">Submit For Board Approval</button>
+            </div>
+          </form>
+        </div>
+      </main>
+
+      <!-- 6. OFFICERS VIEW -->
+      <main id="view-sa-officers" class="page-container">
+        <div class="page-header" style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <h2 class="page-title">Officer Management & Access Control</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Super Admin panel to authorize, edit, suspend, and review credentials for all board officials.</p>
+          </div>
+          <button class="btn-primary" onclick="showAddOfficerModal()" style="display: flex; align-items: center; gap: 8px; width: auto; padding: 10px 20px; font-size: 13px;">
+            <i class="ri-user-add-line"></i> Add Officer
+          </button>
+        </div>
+
+        <div class="table-filter-bar" style="margin-bottom: 20px;">
+          <input type="text" id="officer-search" placeholder="Search by name, ID or email..." class="filter-select" style="flex: 1; min-width: 200px;">
+          <select id="officer-filter-role" class="filter-select" onchange="renderOfficersTable()">
+            <option value="">All Roles</option>
+            <option value="SUPER_ADMIN">Super Admin</option>
+            <option value="SUB_INSPECTOR">Sub Inspector (SI)</option>
+            <option value="INSPECTOR">Investigation Officer (Inspector)</option>
+            <option value="FORENSIC_OFFICER">Forensic Officer</option>
+            <option value="SUPERINTENDENT">Superintendent of Police (SP)</option>
+          </select>
+          <select id="officer-filter-status" class="filter-select" onchange="renderOfficersTable()">
+            <option value="">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="suspended">Suspended</option>
+          </select>
+          <select id="officer-filter-dept" class="filter-select" onchange="renderOfficersTable()">
+            <option value="">All Departments</option>
+            <option value="MAJOR_CRIMES_DIVISION">Major Crimes Division</option>
+            <option value="HOMICIDE_UNIT">Homicide Unit</option>
+            <option value="DIGITAL_FORENSICS_UNIT">Digital Forensics Unit</option>
+            <option value="FINANCIAL_CRIMES_DIVISION">Financial Crimes Division</option>
+            <option value="ORGANIZED_CRIME_UNIT">Organized Crime Unit</option>
+          </select>
+          <select id="officer-sort" class="filter-select" onchange="renderOfficersTable()">
+            <option value="created_desc">Newest First</option>
+            <option value="created_asc">Oldest First</option>
+            <option value="name_asc">Name (A-Z)</option>
+            <option value="name_desc">Name (Z-A)</option>
+          </select>
+        </div>
+
+        <div class="data-table-container">
+          <table class="enterprise-table">
+            <thead>
+              <tr>
+                <th>Officer ID</th>
+                <th>Name</th>
+                <th>Role</th>
+                <th>Department</th>
+                <th>Status</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th>Created Date</th>
+                <th style="text-align: right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="officers-table-body">
+              <!-- Loaded dynamically -->
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination-bar" style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; font-size: 13px; color: var(--text-secondary);">
+          <div>
+            Showing <span id="officers-pagination-range">--</span> of <span id="officers-pagination-total">--</span> officers
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-primary" style="width: auto; padding: 6px 12px; font-size: 12px; background-color: var(--border-light);" onclick="paginateOfficers('prev')">Previous</button>
+            <button class="btn-primary" style="width: auto; padding: 6px 12px; font-size: 12px; background-color: var(--border-light);" onclick="paginateOfficers('next')">Next</button>
+          </div>
+        </div>
+      </main>
+
+      <!-- 7. REPORTS VIEW -->
+      <main id="view-fo-reports" class="page-container">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">CIB Reports Center</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Generate legally verifiable case summaries, chargesheets, and final reports</p>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+          <div class="chart-card">
+            <h3 style="font-size: 16px; margin-bottom: 16px;">Generate Report Files</h3>
+            <div class="form-group">
+              <label class="form-label">Select Target Investigation Case</label>
+              <select class="form-input" id="report-case-select">
+                <!-- Loaded dynamically -->
+              </select>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+              <button class="btn-primary" onclick="generateReportType('Chargesheet')"><i class="ri-file-shield-2-line"></i> Generate Formal Chargesheet</button>
+              <button class="btn-primary" onclick="generateReportType('Final Summary')"><i class="ri-file-list-3-line"></i> Generate Final Board Report</button>
+              <button class="btn-primary" onclick="generateReportType('Evidence Ledger')"><i class="ri-file-history-line"></i> Generate Evidence Ledger Summary</button>
+            </div>
+          </div>
+
+          <div class="chart-card">
+            <h3 style="font-size: 16px; margin-bottom: 16px;">Report Live Document Preview</h3>
+            <div id="report-doc-preview" style="background-color: var(--card-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 24px; min-height: 240px; font-family: monospace; font-size: 12px; line-height: 1.6; color: var(--text-secondary);">
+              Select a case and choose a report format to display details here.
+            </div>
+            <div style="display: flex; justify-content: flex-end; margin-top: 16px;">
+              <button class="btn-primary" style="width: auto;" onclick="exportPDFMock()"><i class="ri-file-pdf-line"></i> Export PDF Document</button>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- 8. ANALYTICS VIEW -->
+      <main id="view-sa-analytics" class="page-container">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Executive Board Analytics</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Verifiable KPIs, incident rates, average resolution duration, and agency performances</p>
+          </div>
+        </div>
+
+        <div class="stats-grid" style="margin-bottom: 24px;">
+          <div class="stat-card">
+            <div class="stat-info">
+              <span class="stat-label">Average Resolution Time</span>
+              <span class="stat-val">28.4 Days</span>
+            </div>
+            <div class="stat-icon" style="background-color: rgba(37, 99, 235, 0.1); color: var(--primary-color); width: 48px; height: 48px; border-radius: 8px;"><i class="ri-time-line"></i></div>
+          </div>
+          <div class="stat-card solved">
+            <div class="stat-info">
+              <span class="stat-label">Resolution Rate</span>
+              <span class="stat-val">76.3%</span>
+            </div>
+            <div class="stat-icon" style="background-color: rgba(16, 185, 129, 0.1); color: var(--success-color); width: 48px; height: 48px; border-radius: 8px;"><i class="ri-percent-line"></i></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-info">
+              <span class="stat-label">Audit Accuracy Rate</span>
+              <span class="stat-val">99.98%</span>
+            </div>
+            <div class="stat-icon" style="background-color: rgba(245, 158, 11, 0.1); color: var(--warning-color); width: 48px; height: 48px; border-radius: 8px;"><i class="ri-shield-check-line"></i></div>
+          </div>
+        </div>
+
+        <!-- 3x2 Grid for Enterprise Analytics Charts -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 24px; margin-bottom: 32px;">
+          <!-- Chart 1: Cases by Crime -->
+          <div class="chart-card">
+            <div class="chart-header">Cases by Crime Category</div>
+            <div class="chart-body" id="chart-cases-by-crime" style="min-height: 250px; background-color: transparent;"></div>
+          </div>
+          <!-- Chart 2: Cases by Month -->
+          <div class="chart-card">
+            <div class="chart-header">Monthly Investigation Trends</div>
+            <div class="chart-body" id="chart-cases-by-month" style="min-height: 250px; background-color: transparent;"></div>
+          </div>
+          <!-- Chart 3: Department Performance -->
+          <div class="chart-card">
+            <div class="chart-header">Division / Department Performance Index</div>
+            <div class="chart-body" id="chart-dept-perf" style="min-height: 250px; background-color: transparent;"></div>
+          </div>
+          <!-- Chart 4: Officer Performance -->
+          <div class="chart-card">
+            <div class="chart-header">Officer Case Resolution Leaders</div>
+            <div class="chart-body" id="chart-officer-perf" style="min-height: 250px; background-color: transparent;"></div>
+          </div>
+          <!-- Chart 5: Pending vs Solved -->
+          <div class="chart-card">
+            <div class="chart-header">Investigation Clearance Rate (Pending vs Solved)</div>
+            <div class="chart-body" id="chart-pending-solved" style="min-height: 250px; background-color: transparent;"></div>
+          </div>
+          <!-- Chart 6: Evidence Statistics -->
+          <div class="chart-card">
+            <div class="chart-header">Evidence Ingest Volumes by Category</div>
+            <div class="chart-body" id="chart-evidence-stats" style="min-height: 250px; background-color: transparent;"></div>
+          </div>
+        </div>
+      </main>
+
+      <!-- 9. SETTINGS VIEW -->
+      <main id="view-sa-settings" class="page-container">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Administrative Settings</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Platform access controls, API keys, role permissions, and immutable audit logs</p>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 24px;">
+          <!-- Profile Configuration -->
+          <div class="chart-card">
+            <h3 style="font-size: 16px; margin-bottom: 16px;">Access Configuration</h3>
+            <div class="form-group">
+              <label class="form-label">Authorized Role Mapping</label>
+              <input type="text" class="form-input" value="BOARD_ADMINISTRATOR" readonly>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Encryption Level</label>
+              <input type="text" class="form-input" value="AES-GCM-256 Enabled" readonly>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Session Lifetime</label>
+              <select class="form-input">
+                <option>15 Minutes (Recommended)</option>
+                <option>30 Minutes</option>
+                <option>1 Hour</option>
+              </select>
+            </div>
+            <button class="btn-primary" style="width: auto;" onclick="triggerToast('Security profile verified and updated.', 'success')">Save Configuration</button>
+          </div>
+
+          <!-- Audit Logs -->
+          <div class="chart-card">
+            <h3 style="font-size: 16px; margin-bottom: 16px;">Platform Access Audit Logs (Immutable)</h3>
+            <div style="display: flex; flex-direction: column; gap: 12px; font-size: 12px; font-family: monospace; color: var(--text-secondary);">
+              <div style="background-color: var(--card-color); padding: 10px; border-radius: 4px; border: 1px solid var(--border-color);">
+                [2026-07-19T12:51:00Z] SUCCESSFUL AUTHENTICATION - USER: SA-001 - IP: 192.168.1.112
+              </div>
+              <div style="background-color: var(--card-color); padding: 10px; border-radius: 4px; border: 1px solid var(--border-color);">
+                [2026-07-18T18:32:00Z] EVIDENCE LOCKER SECURE ACCESS CHECK - CASE-2026-081 - USER: SA-001
+              </div>
+              <div style="background-color: var(--card-color); padding: 10px; border-radius: 4px; border: 1px solid var(--border-color);">
+                [2026-07-17T09:15:00Z] GENETIC FORENSIC REPORT SIGN-OFF - FOR-2026-022 - USER: Dr. Alistair Sterling
+              </div>
+              <div style="background-color: var(--card-color); padding: 10px; border-radius: 4px; border: 1px solid var(--border-color);">
+                [2026-07-16T14:40:00Z] EVIDENCE ITEM INGESTED - EVID-2026-1182 - USER: Officer Collins
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- SUPER ADMIN DEPARTMENTS -->
+      <main id="view-sa-departments" class="page-container">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">CIB Departments Registry</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Review and manage active criminal investigation divisions.</p>
+          </div>
+        </div>
+        <div class="stats-grid" id="departments-grid" style="margin-bottom: 24px;">
+          <!-- Loaded dynamically from database -->
+        </div>
+      </main>
+
+      <!-- SUPER ADMIN AUDIT LOGS -->
+      <main id="view-sa-audit-logs" class="page-container">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Immutable Audit Trail Logs</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">System operations, security events, and database actions.</p>
+          </div>
+        </div>
+        <div class="table-filter-bar" style="margin-bottom: 16px; gap: 12px; flex-wrap: wrap; display: flex; align-items: center;">
+          <input type="text" id="audit-log-search" placeholder="Search by ID, Details, IP..." class="filter-select" style="padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-color); background-color: var(--card-color); color: #FFF; width: 220px;" oninput="loadGlobalAuditLogs()">
+          <select id="audit-log-filter-action" class="filter-select" onchange="loadGlobalAuditLogs()">
+            <option value="">All Actions</option>
+            <option value="Officer Login">Officer Login</option>
+            <option value="Logout">Logout</option>
+            <option value="Officer Created">Officer Created</option>
+            <option value="Officer Updated">Officer Updated</option>
+            <option value="Password Reset">Password Reset</option>
+            <option value="Case Created">Case Created</option>
+            <option value="Case Assigned">Case Assigned</option>
+            <option value="Evidence Uploaded">Evidence Uploaded</option>
+            <option value="Report Uploaded">Report Uploaded</option>
+            <option value="Case Closed">Case Closed</option>
+          </select>
+          <select id="audit-log-filter-role" class="filter-select" onchange="loadGlobalAuditLogs()">
+            <option value="">All Roles</option>
+            <option value="SUPER_ADMIN">Super Admin</option>
+            <option value="SUB_INSPECTOR">Sub Inspector</option>
+            <option value="INSPECTOR">Inspector</option>
+            <option value="FORENSIC_OFFICER">Forensic Officer</option>
+            <option value="SUPERINTENDENT">Superintendent</option>
+          </select>
+        </div>
+        <div class="chart-card">
+          <div id="sa-audit-logs-list" style="display: flex; flex-direction: column; gap: 10px; max-height: 500px; overflow-y: auto; font-family: monospace; font-size: 12px; color: var(--text-secondary);">
+            <!-- Loaded dynamically from API /api/officers/audit-logs -->
+        </div>
+        <div class="pagination-bar" style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; font-size: 13px; color: var(--text-secondary);">
+          <div>
+            Showing <span id="audit-pagination-range">--</span> of <span id="audit-pagination-total">--</span> logs
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-primary" style="width: auto; padding: 6px 12px; font-size: 12px; background-color: var(--border-light);" onclick="paginateAuditLogs('prev')">Previous</button>
+            <button class="btn-primary" style="width: auto; padding: 6px 12px; font-size: 12px; background-color: var(--border-light);" onclick="paginateAuditLogs('next')">Next</button>
+          </div>
+        </div>
+      </main>
+
+      <!-- SUB INSPECTOR DASHBOARD -->
+      <main id="view-si-dashboard" class="page-container">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">SI Terminal Overview</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">FIR Intake and Preliminary Incident Records.</p>
+          </div>
+        </div>
+        <div class="stats-grid" style="margin-bottom: 24px;">
+          <div class="stat-card">
+            <div class="stat-info">
+              <span class="stat-label">Pending FIR Filings</span>
+              <span class="stat-val">3</span>
+            </div>
+          </div>
+          <div class="stat-card solved">
+            <div class="stat-info">
+              <span class="stat-label">Total Registered Cases</span>
+              <span class="stat-val">48</span>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- SUB INSPECTOR REGISTER FIR -->
+      <main id="view-si-register-fir" class="page-container">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">First Information Report Entry</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Log preliminary statements and register incidents.</p>
+          </div>
+        </div>
+        <div class="chart-card" style="max-width: 600px;">
+          <button class="btn-primary" onclick="showRegisterFirModal()" style="width: auto;"><i class="ri-add-line"></i> Open FIR Form Wizard</button>
+        </div>
+      </main>
+
+      <!-- SUB INSPECTOR CREATE CASE -->
+      <main id="view-si-create-case" class="page-container">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Case File Generation</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Convert registered FIR details into an active criminal board case.</p>
+          </div>
+        </div>
+        <div class="chart-card" style="max-width: 600px;">
+          <button class="btn-primary" onclick="showRegisterFirModal()" style="width: auto;"><i class="ri-folder-add-line"></i> Launch Case File Wizard</button>
+        </div>
+      </main>
+
+      <!-- SUB INSPECTOR VICTIMS -->
+      <main id="view-si-victims" class="page-container">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Victim & Target Registry</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Log and manage protected victims and target profiles.</p>
+          </div>
+        </div>
+        <div class="chart-card">
+          <table class="enterprise-table">
+            <thead>
+              <tr><th>Victim ID</th><th>Full Name</th><th>Associated Case</th><th>Contact</th></tr>
+            </thead>
+            <tbody id="view-victims-tbody">
+              <!-- Loaded dynamically from database -->
+            </tbody>
+          </table>
+        </div>
+      </main>
+
+      <!-- SUB INSPECTOR WITNESSES -->
+      <main id="view-si-witnesses" class="page-container">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Witness Statements Index</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Review logged witness profiles and verified statements.</p>
+          </div>
+        </div>
+        <div class="chart-card">
+          <table class="enterprise-table">
+            <thead>
+              <tr><th>Witness ID</th><th>Full Name</th><th>Associated Case</th><th>Statement Excerpt</th></tr>
+            </thead>
+            <tbody id="view-witnesses-tbody">
+              <!-- Loaded dynamically from database -->
+            </tbody>
+          </table>
+        </div>
+      </main>
+
+      <!-- SUB INSPECTOR SUSPECTS -->
+      <main id="view-si-suspects" class="page-container">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Suspect Registry Ledger</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Active primary suspects list under surveillance or investigation.</p>
+          </div>
+        </div>
+        <div class="chart-card">
+          <table class="enterprise-table">
+            <thead>
+              <tr><th>Suspect ID</th><th>Name</th><th>Known Aliases</th><th>Case Reference</th></tr>
+            </thead>
+            <tbody id="view-suspects-tbody">
+              <!-- Loaded dynamically from database -->
+            </tbody>
+          </table>
+        </div>
+      </main>
+
+      <!-- INVESTIGATION OFFICER DASHBOARD -->
+      <main id="view-io-dashboard" class="page-container">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Investigator Command Overview</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Incident tracker, assigned boards, and pending forensics.</p>
+          </div>
+        </div>
+        <div class="stats-grid" style="margin-bottom: 24px;">
+          <div class="stat-card">
+            <div class="stat-info">
+              <span class="stat-label">Assigned Cases</span>
+              <span class="stat-val" id="io-assigned-count">2</span>
+            </div>
+          </div>
+          <div class="stat-card solved">
+            <div class="stat-info">
+              <span class="stat-label">Evidence Pieces Logged</span>
+              <span class="stat-val">12</span>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- INVESTIGATION OFFICER ASSIGNED CASES -->
+      <main id="view-io-cases" class="page-container">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Assigned Case Files</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Active cases assigned to your command badge.</p>
+          </div>
+        </div>
+        <div class="data-table-container">
+          <table class="enterprise-table">
+            <thead>
+              <tr><th>Case ID</th><th>Title</th><th>Priority</th><th>Status</th><th>Action</th></tr>
+            </thead>
+            <tbody id="io-cases-table-body">
+              <!-- Loaded dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </main>
+
+      <!-- INVESTIGATION OFFICER NOTES -->
+      <main id="view-io-notes" class="page-container">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Classified Investigator Notes</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Case files command notes, suspect interviews, and logs.</p>
+          </div>
+        </div>
+        <div class="chart-card">
+          <table class="enterprise-table">
+            <thead>
+              <tr><th>Case ID</th><th>Subject</th><th>Note Content</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>CASE-2026-081</td><td>Cody Fisher Interview</td><td>Suspect claims alibi for night of robbery. Under review.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </main>
+
+      <!-- INVESTIGATION OFFICER FORENSIC REQUESTS -->
+      <main id="view-io-forensics" class="page-container">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Forensic Laboratory Dispatch Requests</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Track status of forensic Swabs, DNA profile requests, and Ballistic scans.</p>
+          </div>
+        </div>
+        <div class="chart-card">
+          <table class="enterprise-table">
+            <thead>
+              <tr><th>Request ID</th><th>Case ID</th><th>Analysis Type</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>FOR-2026-081</td><td>CASE-2026-081</td><td>Fingerprint Verification</td><td><span class="badge" style="background-color: var(--warning-color); color: #000;">Pending Analyst</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </main>
+
+      <!-- FORENSIC OFFICER DASHBOARD -->
+      <main id="view-fo-dashboard" class="page-container">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Forensic Lab Dashboard</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Active laboratory queues and diagnostic indicators.</p>
+          </div>
+        </div>
+        <div class="stats-grid" style="margin-bottom: 24px;">
+          <div class="stat-card">
+            <div class="stat-info">
+              <span class="stat-label">Pending Lab Requests</span>
+              <span class="stat-val">4</span>
+            </div>
+          </div>
+          <div class="stat-card solved">
+            <div class="stat-info">
+              <span class="stat-label">Completed DNA Profiles</span>
+              <span class="stat-val">19</span>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- FORENSIC OFFICER UPLOAD REPORTS -->
+      <main id="view-fo-upload" class="page-container">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Submit Lab Reports Portal</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Upload findings and verified matches to CIB server registry.</p>
+          </div>
+        </div>
+        <div class="chart-card" style="max-width: 600px;">
+          <h3 style="font-size: 16px; margin-bottom: 16px;">Log New Lab Report</h3>
+          <button class="btn-primary" onclick="switchView('fo-pending')" style="width: auto;"><i class="ri-file-add-line"></i> Select Request from Pending Queue</button>
+        </div>
+      </main>
+
+      <!-- FORENSIC OFFICER FINGERPRINT -->
+      <main id="view-fo-fingerprint" class="page-container">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Automated Fingerprint Identification System (AFIS)</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Query latents against federal database registries.</p>
+          </div>
+        </div>
+        <div class="chart-card">
+          <div style="display: flex; gap: 16px; margin-bottom: 24px;">
+            <input type="text" class="form-input" style="background-color: var(--card-color); border:1px solid var(--border-color); color:#FFF; padding:10px; border-radius:6px; flex-grow:1;" placeholder="Enter biometric token or search ID...">
+            <button class="btn-primary" style="width: auto;" onclick="triggerToast('AFIS query dispatched. Searching biometric records database...', 'success')"><i class="ri-search-line"></i> Run Matcher</button>
+          </div>
+        </div>
+      </main>
+
+      <!-- FORENSIC OFFICER DNA -->
+      <main id="view-fo-dna" class="page-container">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">CODIS Genotyping Panel</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">DNA Profile Swab matching, locus matching index, and STR analysis.</p>
+          </div>
+        </div>
+        <div class="chart-card">
+          <button class="btn-primary" style="width: auto;" onclick="triggerToast('CODIS search complete. 0 matches found in general offender list.', 'success')"><i class="ri-dna-line"></i> Run STR Comparison Matrix</button>
+        </div>
+      </main>
+
+      <!-- SUPERINTENDENT DASHBOARD -->
+      <main id="view-sp-dashboard" class="page-container">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Superintendent Command Terminal</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Verifiable division KPIs, unresolved cases, and approval workflows.</p>
+          </div>
+        </div>
+        <div class="stats-grid" style="margin-bottom: 24px;">
+          <div class="stat-card">
+            <div class="stat-info">
+              <span class="stat-label">Awaiting Case Review</span>
+              <span class="stat-val">2</span>
+            </div>
+          </div>
+          <div class="stat-card solved">
+            <div class="stat-info">
+              <span class="stat-label">Solved Division Cases</span>
+              <span class="stat-val">24</span>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <!-- SUPERINTENDENT APPROVALS -->
+      <main id="view-sp-approvals" class="page-container">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Approvals Registry Workflow</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Approve case closing, forensic findings, or warrants.</p>
+          </div>
+        </div>
+        <div class="chart-card">
+          <table class="enterprise-table">
+            <thead>
+              <tr><th>Approval ID</th><th>Description</th><th>Case Reference</th><th>Action</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>APP-009</td><td>Approve Forensic findings for report FOR-2026-081</td><td>CASE-2026-081</td><td><button class="btn-primary" style="width:auto; padding:6px 12px; font-size:12px;" onclick="triggerToast('Findings Approved.', 'success')">Approve</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </main>
+
+      <!-- SUPERINTENDENT ASSIGN OFFICERS -->
+      <main id="view-sp-assign-officers" class="page-container">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Officer Dispatch & Assignment Board</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Assign Inspectors/Investigation Officers to active case boards.</p>
+          </div>
+        </div>
+        <div class="chart-card">
+          <table class="enterprise-table">
+            <thead>
+              <tr><th>Case ID</th><th>Title</th><th>Current Officer</th><th>Action</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>CASE-2026-081</td><td>Midnight Syndicate Heist</td><td>Unassigned</td><td><button class="btn-primary" style="width:auto; padding:6px 12px; font-size:12px;" onclick="showAssignInspectorModal('CASE-2026-081')">Assign Officer</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </main>
+
+      <!-- SUPERINTENDENT ASSIGN FORENSICS -->
+      <main id="view-sp-assign-forensics" class="page-container">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Forensic Dispatch Controls</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Assign lab requests and review forensic status reports.</p>
+          </div>
+        </div>
+        <div class="chart-card">
+          <table class="enterprise-table">
+            <thead>
+              <tr><th>Report ID</th><th>Case Reference</th><th>Biometric Type</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>FOR-2026-081</td><td>CASE-2026-081</td><td>Fingerprint Scan</td><td><span class="badge" style="background-color: var(--warning-color); color: #000;">Pending Approval</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </main>
+
+      <!-- SUPERINTENDENT REVIEW CASES -->
+      <main id="view-sp-review-cases" class="page-container">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Superintendent Case Review Board</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Review chronological case journals, timeline nodes, and witness statements.</p>
+          </div>
+        </div>
+        <div class="chart-card">
+          <table class="enterprise-table">
+            <thead>
+              <tr><th>Case ID</th><th>Case Subject</th><th>Action</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>CASE-2026-081</td><td>Midnight Syndicate Heist</td><td><button class="btn-primary" style="width:auto; padding:6px 12px; font-size:12px; background-color:var(--warning-color);" onclick="showReviewCaseModal('CASE-2026-081')">Review Files</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </main>
+
+      <!-- SUPERINTENDENT CHARGESHEET -->
+      <main id="view-sp-chargesheet" class="page-container">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Chargesheet Signing Board</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Review and authorize draft chargesheets before judicial dispatch.</p>
+          </div>
+        </div>
+        <div class="chart-card">
+          <table class="enterprise-table">
+            <thead>
+              <tr><th>Draft ID</th><th>Subject Target</th><th>Related Case</th><th>Action</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>CHG-701</td><td>Cody Fisher</td><td>CASE-2026-081</td><td><button class="btn-primary" style="width:auto; padding:6px 12px; font-size:12px; background-color:var(--success-color);" onclick="approveChargesheet('CASE-2026-081')">Approve & Close Case</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </main>
+
+      <!-- SUPERINTENDENT CLOSE CASES -->
+      <main id="view-sp-close-cases" class="page-container">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Case Closure Archive</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Review solved and closed case files archive logs.</p>
+          </div>
+        </div>
+        <div class="chart-card">
+          <table class="enterprise-table">
+            <thead>
+              <tr><th>Case ID</th><th>Subject</th><th>Closure Date</th><th>Final Status</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>CASE-2026-102</td><td>Holloway Warehouse Homicide</td><td>2026-07-18</td><td><span class="badge badge-status-solved">Solved</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </main>
+
+      <!-- 10. UNAUTHORIZED VIEW -->
+      <main id="view-unauthorized" class="page-container">
+        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:480px; text-align:center;">
+          <div style="width: 80px; height: 80px; border-radius: 50%; background-color: rgba(239, 68, 68, 0.1); color: var(--danger-color); display: flex; align-items: center; justify-content: center; font-size: 32px; margin-bottom: 24px; border: 1px solid rgba(239, 68, 68, 0.25);">
+            <i class="ri-git-repository-private-line"></i>
+          </div>
+          <h2 style="font-size: 22px; font-weight: 700; margin-bottom: 8px;">Access Denied</h2>
+          <p style="color: var(--text-secondary); font-size: 14px; max-width: 380px; line-height: 1.6; margin-bottom: 24px;">Your current security clearance level is insufficient to view this classified module or command room.</p>
+          <button class="btn-primary" style="width: auto; padding: 10px 20px;" onclick="switchView('dashboard')">Return to Dashboard</button>
+        </div>
+      </main>
+
+    </div>
+  </div>
+
+  <!-- Add/Edit Officer Modal -->
+  <div id="modal-officer-form" class="modal-overlay">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3 class="modal-title" id="officer-modal-title"><i class="ri-user-add-line"></i> Add New Officer</h3>
+        <button class="modal-close-btn" onclick="hideModal('modal-officer-form')"><i class="ri-close-line"></i></button>
+      </div>
+      <form id="officer-form" onsubmit="handleOfficerSubmit(event)">
+        <input type="hidden" id="officer-form-id">
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 16px;">
+          <div class="form-group">
+            <label class="form-label" for="officer-form-name">Full Name</label>
+            <input type="text" id="officer-form-name" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="officer-form-email">Email Address</label>
+            <input type="email" id="officer-form-email" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="officer-form-phone">Phone Number</label>
+            <input type="tel" id="officer-form-phone" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" placeholder="e.g. +1234567890" required>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div class="form-group">
+              <label class="form-label" for="officer-form-role">Security Role</label>
+              <select id="officer-form-role" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
+                <option value="SUPER_ADMIN">Super Admin</option>
+                <option value="SUB_INSPECTOR">Sub Inspector (SI)</option>
+                <option value="INSPECTOR">Investigation Officer (Inspector)</option>
+                <option value="FORENSIC_OFFICER">Forensic Officer</option>
+                <option value="SUPERINTENDENT">Superintendent of Police (SP)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="officer-form-rank">Officer Rank</label>
+              <select id="officer-form-rank" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
+                <option value="SUPERVISORY_SPECIAL_AGENT">Supervisory Special Agent</option>
+                <option value="LEAD_DETECTIVE">Lead Detective</option>
+                <option value="CYBER_SPECIALIST">Cyber Specialist</option>
+                <option value="DETECTIVE">Detective</option>
+                <option value="SPECIAL_AGENT">Special Agent</option>
+              </select>
+            </div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div class="form-group">
+              <label class="form-label" for="officer-form-department">Department Division</label>
+              <select id="officer-form-department" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
+                <option value="MAJOR_CRIMES_DIVISION">Major Crimes Division</option>
+                <option value="HOMICIDE_UNIT">Homicide Unit</option>
+                <option value="DIGITAL_FORENSICS_UNIT">Digital Forensics Unit</option>
+                <option value="FINANCIAL_CRIMES_DIVISION">Financial Crimes Division</option>
+                <option value="ORGANIZED_CRIME_UNIT">Organized Crime Unit</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="officer-form-station">Police Station Branch</label>
+              <input type="text" id="officer-form-station" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" placeholder="e.g. Metro HQ Branch" required>
+            </div>
+          </div>
+          <div style="background-color: rgba(37,99,235,0.1); border: 1px solid rgba(37,99,235,0.2); padding: 12px; border-radius: 6px; font-size: 12px; color: var(--text-secondary);">
+            <i class="ri-information-line" style="color: var(--primary-color);"></i> On creation, a unique Officer ID and an encrypted temporary password will be auto-generated. Credentials will be dispatched directly to the officer's email. A forced password change is mandatory on first login.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-primary" style="background-color: transparent; border: 1px solid var(--border-light); color: var(--text-primary); width: auto;" onclick="hideModal('modal-officer-form')">Cancel</button>
+          <button type="submit" class="btn-primary" style="width: auto;" id="officer-submit-btn">Create Officer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- View Officer logs and profile modal -->
+  <div id="modal-officer-detail" class="modal-overlay">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3 class="modal-title"><i class="ri-user-search-line"></i> Officer File & Logs</h3>
+        <button class="modal-close-btn" onclick="hideModal('modal-officer-detail')"><i class="ri-close-line"></i></button>
+      </div>
+      <div class="modal-body" style="padding-top: 10px;">
+        <div class="modal-tabs">
+          <button class="modal-tab active" id="tab-profile-btn" onclick="switchModalTab('profile')">Profile Details</button>
+          <button class="modal-tab" id="tab-activity-btn" onclick="switchModalTab('activity')">Activity History</button>
+          <button class="modal-tab" id="tab-login-btn" onclick="switchModalTab('login')">Login History</button>
+        </div>
+
+        <!-- Profile Tab Content -->
+        <div id="modal-tab-profile" class="modal-tab-content active">
+          <div style="display: grid; grid-template-columns: 120px 1fr; gap: 20px; align-items: start; margin-bottom: 20px;">
+            <div style="width: 120px; height: 120px; border-radius: 8px; border: 1px solid var(--border-light); background-color: var(--card-color); display: flex; align-items: center; justify-content: center; overflow: hidden;">
+              <img id="detail-avatar-img" style="width: 100%; height: 100%; object-fit: cover;">
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px;">
+              <div><strong>Name:</strong> <span id="detail-name"></span></div>
+              <div><strong>Officer ID:</strong> <span id="detail-id" style="font-family: monospace; font-weight: 700; color: #FFF; background-color: var(--card-color); padding: 2px 6px; border-radius: 4px;"></span></div>
+              <div><strong>Clearance Level:</strong> <span id="detail-role"></span></div>
+              <div><strong>Rank:</strong> <span id="detail-rank"></span></div>
+              <div><strong>Department:</strong> <span id="detail-dept"></span></div>
+              <div><strong>Station Branch:</strong> <span id="detail-station"></span></div>
+              <div><strong>System Status:</strong> <span id="detail-status"></span></div>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--border-color); padding-top: 16px; font-size: 13px;">
+            <div><strong>Email Address:</strong> <span id="detail-email"></span></div>
+            <div><strong>Contact Number:</strong> <span id="detail-phone"></span></div>
+            <div><strong>Enlisted Date:</strong> <span id="detail-created"></span></div>
+          </div>
+        </div>
+
+        <!-- Activity Tab Content -->
+        <div id="modal-tab-activity" class="modal-tab-content" style="max-height: 350px; overflow-y: auto;">
+          <div id="detail-activity-logs" style="display: flex; flex-direction: column; gap: 8px;">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+
+        <!-- Login History Tab Content -->
+        <div id="modal-tab-login" class="modal-tab-content" style="max-height: 350px; overflow-y: auto;">
+          <div id="detail-login-logs" style="display: flex; flex-direction: column; gap: 8px;">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-primary" style="width: auto;" onclick="hideModal('modal-officer-detail')">Close File</button>
+      </div>
+  <!-- Register FIR & Create Case Modal -->
+  <div id="modal-register-fir" class="modal-overlay">
+    <div class="modal-container" style="max-width: 700px;">
+      <div class="modal-header">
+        <h3 class="modal-title"><i class="ri-file-add-line"></i> Register FIR & Initiate Case</h3>
+        <button class="modal-close-btn" onclick="hideModal('modal-register-fir')"><i class="ri-close-line"></i></button>
+      </div>
+      <form id="fir-form" onsubmit="handleFirSubmit(event)">
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 16px; max-height: 70vh; overflow-y: auto;">
+          <h4 style="border-bottom: 1px solid var(--border-color); padding-bottom: 8px; color: var(--primary-color);">1. First Information Report (FIR) Details</h4>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div class="form-group">
+              <label class="form-label" for="fir-form-id">FIR Reference Number</label>
+              <input type="text" id="fir-form-id" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" placeholder="e.g. FIR-2026-001" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="fir-form-reporter">Reporter / Complainant Name</label>
+              <input type="text" id="fir-form-reporter" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="fir-form-title">FIR Title / Subject</label>
+            <input type="text" id="fir-form-title" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="fir-form-desc">FIR Description & Statement</label>
+            <textarea id="fir-form-desc" class="form-input" style="width: 100%; padding: 10px; height: 80px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px; resize: none;" required></textarea>
+          </div>
+
+          <h4 style="border-bottom: 1px solid var(--border-color); padding-bottom: 8px; color: var(--primary-color); margin-top: 10px;">2. Associated Criminal Case File</h4>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div class="form-group">
+              <label class="form-label" for="fir-case-id">Case ID Reference</label>
+              <input type="text" id="fir-case-id" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" placeholder="e.g. CASE-2026-101" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="fir-case-title">Case Title</label>
+              <input type="text" id="fir-case-title" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
+            </div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div class="form-group">
+              <label class="form-label" for="fir-crime-type">Crime Category</label>
+              <select id="fir-crime-type" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
+                <option value="Homicide">Homicide</option>
+                <option value="Cybercrime">Cybercrime</option>
+                <option value="Financial Crime">Financial Crime</option>
+                <option value="Organized Crime">Organized Crime</option>
+                <option value="Grand Larceny">Grand Larceny</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="fir-case-priority">Priority Level</label>
+              <select id="fir-case-priority" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+                <option value="Critical">Critical</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="fir-case-location">Incident Location / Jurisdiction</label>
+            <input type="text" id="fir-case-location" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-primary" style="background-color: transparent; border: 1px solid var(--border-light); color: var(--text-primary); width: auto;" onclick="hideModal('modal-register-fir')">Cancel</button>
+          <button type="submit" class="btn-primary" style="width: auto;">Register & Initiate</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Assign Officer Modal -->
+  <div id="modal-assign-inspector" class="modal-overlay">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3 class="modal-title"><i class="ri-user-shared-line"></i> Assign Investigation Officer</h3>
+        <button class="modal-close-btn" onclick="hideModal('modal-assign-inspector')"><i class="ri-close-line"></i></button>
+      </div>
+      <form id="assign-inspector-form" onsubmit="handleAssignInspectorSubmit(event)">
+        <input type="hidden" id="assign-case-id">
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 16px;">
+          <div class="form-group">
+            <label class="form-label" for="assign-inspector-select">Select Officer / Inspector</label>
+            <select id="assign-inspector-select" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
+              <!-- Filled dynamically with Inspectors -->
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-primary" style="background-color: transparent; border: 1px solid var(--border-light); color: var(--text-primary); width: auto;" onclick="hideModal('modal-assign-inspector')">Cancel</button>
+          <button type="submit" class="btn-primary" style="width: auto;">Assign Officer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Upload Evidence Modal -->
+  <div id="modal-evidence-upload" class="modal-overlay">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3 class="modal-title"><i class="ri-upload-cloud-line"></i> Ingest Evidence File</h3>
+        <button class="modal-close-btn" onclick="hideModal('modal-evidence-upload')"><i class="ri-close-line"></i></button>
+      </div>
+      <form id="evidence-upload-form" onsubmit="handleEvidenceUploadSubmit(event)">
+        <input type="hidden" id="evidence-case-id">
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 16px;">
+          <div class="form-group">
+            <label class="form-label" for="evidence-file-input">Select File</label>
+            <input type="file" id="evidence-file-input" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="evidence-category-select">Evidence Category</label>
+            <select id="evidence-category-select" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
+              <option value="DigitalHardware">Digital Hardware</option>
+              <option value="Weapon">Weapon</option>
+              <option value="Document">Document</option>
+              <option value="Narcotics">Narcotics</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-primary" style="background-color: transparent; border: 1px solid var(--border-light); color: var(--text-primary); width: auto;" onclick="hideModal('modal-evidence-upload')">Cancel</button>
+          <button type="submit" class="btn-primary" style="width: auto;">Upload & Index</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Request Forensic Analysis Modal -->
+  <div id="modal-request-forensic" class="modal-overlay">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3 class="modal-title"><i class="ri-microscope-line"></i> Request Forensic Analysis</h3>
+        <button class="modal-close-btn" onclick="hideModal('modal-request-forensic')"><i class="ri-close-line"></i></button>
+      </div>
+      <form id="request-forensic-form" onsubmit="handleRequestForensicSubmit(event)">
+        <input type="hidden" id="forensic-case-id">
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 16px;">
+          <div class="form-group">
+            <label class="form-label" for="forensic-report-id">Report ID Reference</label>
+            <input type="text" id="forensic-report-id" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" placeholder="e.g. FOR-2026-001" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="forensic-type-select">Analysis Type</label>
+            <select id="forensic-type-select" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
+              <option value="Fingerprint Verification">Fingerprint Verification</option>
+              <option value="DNA Profile Swab Match">DNA Profile Swab Match</option>
+              <option value="Ballistics Striation Scan">Ballistics Striation Scan</option>
+              <option value="Autopsy Toxicology Report">Autopsy Toxicology Report</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="forensic-summary-input">Request Summary / Objective</label>
+            <textarea id="forensic-summary-input" class="form-input" style="width: 100%; padding: 10px; height: 80px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px; resize: none;" placeholder="Provide laboratory instructions..." required></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-primary" style="background-color: transparent; border: 1px solid var(--border-light); color: var(--text-primary); width: auto;" onclick="hideModal('modal-request-forensic')">Cancel</button>
+          <button type="submit" class="btn-primary" style="width: auto;">Submit Request</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Submit Forensic Findings Modal -->
+  <div id="modal-submit-forensic" class="modal-overlay">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3 class="modal-title"><i class="ri-file-upload-line"></i> Submit Forensic Findings</h3>
+        <button class="modal-close-btn" onclick="hideModal('modal-submit-forensic')"><i class="ri-close-line"></i></button>
+      </div>
+      <form id="submit-forensic-form" onsubmit="handleSubmitForensicSubmit(event)">
+        <input type="hidden" id="submit-report-id">
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 16px;">
+          <div class="form-group">
+            <label class="form-label" for="submit-forensic-summary">Laboratory Findings Summary</label>
+            <textarea id="submit-forensic-summary" class="form-input" style="width: 100%; padding: 10px; height: 120px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px; resize: none;" placeholder="Summarize your forensic findings here..." required></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-primary" style="background-color: transparent; border: 1px solid var(--border-light); color: var(--text-primary); width: auto;" onclick="hideModal('modal-submit-forensic')">Cancel</button>
+          <button type="submit" class="btn-primary" style="width: auto;">Submit Findings</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Review Case Modal -->
+  <div id="modal-review-case" class="modal-overlay">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3 class="modal-title"><i class="ri-survey-line"></i> Superintendent Case Review</h3>
+        <button class="modal-close-btn" onclick="hideModal('modal-review-case')"><i class="ri-close-line"></i></button>
+      </div>
+      <form id="review-case-form" onsubmit="handleReviewCaseSubmit(event)">
+        <input type="hidden" id="review-case-id">
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 16px;">
+          <div class="form-group">
+            <label class="form-label" for="review-notes-input">Superintendent Review Notes</label>
+            <textarea id="review-notes-input" class="form-input" style="width: 100%; padding: 10px; height: 120px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px; resize: none;" placeholder="Log your official case review notes..." required></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-primary" style="background-color: transparent; border: 1px solid var(--border-light); color: var(--text-primary); width: auto;" onclick="hideModal('modal-review-case')">Cancel</button>
+          <button type="submit" class="btn-primary" style="width: auto;">Log Review</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Core Script Loaders -->
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

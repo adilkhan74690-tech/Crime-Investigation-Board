@@ -1,0 +1,317 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  SUPER_ADMIN      @map("SUPER_ADMIN")
+  INSPECTOR        @map("INSPECTOR")
+  FORENSIC_OFFICER @map("FORENSIC_OFFICER")
+  SUB_INSPECTOR    @map("SUB_INSPECTOR")
+  SUPERINTENDENT   @map("SUPERINTENDENT")
+}
+
+enum Department {
+  MAJOR_CRIMES_DIVISION     @map("Major Crimes Division")
+  HOMICIDE_UNIT             @map("Homicide Unit")
+  DIGITAL_FORENSICS_UNIT    @map("Digital Forensics Unit")
+  FINANCIAL_CRIMES_DIVISION @map("Financial Crimes Division")
+  ORGANIZED_CRIME_UNIT      @map("Organized Crime Unit")
+}
+
+enum CaseStatus {
+  Active @map("Active")
+  Solved @map("Solved")
+}
+
+enum Priority {
+  Low    @map("Low")
+  Medium @map("Medium")
+  High   @map("High")
+}
+
+enum OfficerRank {
+  SUPERVISORY_SPECIAL_AGENT @map("Supervisory Special Agent")
+  LEAD_DETECTIVE            @map("Lead Detective")
+  CYBER_SPECIALIST          @map("Cyber Specialist")
+  DETECTIVE                 @map("Detective")
+  SPECIAL_AGENT             @map("Special Agent")
+}
+
+enum EvidenceType {
+  DigitalHardware @map("Digital Hardware")
+  Weapon          @map("Weapon")
+  Document        @map("Document")
+  Narcotics       @map("Narcotics")
+  Other           @map("Other")
+}
+
+enum NotificationType {
+  Info       @map("Info")
+  Alert      @map("Alert")
+  Assignment @map("Assignment")
+  System     @map("System")
+}
+
+enum CrimeCategory {
+  GrandLarceny    @map("Grand Larceny")
+  OrganizedCrime  @map("Organized Crime")
+  Homicide        @map("Homicide")
+  Cybercrime      @map("Cybercrime")
+  FinancialCrime  @map("Financial Crime")
+  Other           @map("Other")
+}
+
+model User {
+  id                     String            @id @default(uuid())
+  email                  String            @unique
+  password               String
+  name                   String
+  role                   Role
+  department             Department
+  isActive               Boolean           @default(true)
+  passwordChangeRequired Boolean           @default(false)
+  phone                  String?
+  policeStation          String?
+  lastLogin              DateTime?
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+  officer                Officer?
+  auditLogs              AuditLog[]
+  activityLogs           ActivityLog[]
+  notifications          Notification[]
+  otpVerification        OtpVerification?
+}
+
+model Officer {
+  id               String                   @id // Maps to User id
+  user             User                     @relation(fields: [id], references: [id], onDelete: Cascade)
+  rank             OfficerRank
+  assignedCases    Int                      @default(0)
+  solvedCases      Int                      @default(0)
+  performanceScore Int                      @default(100)
+  availability     String                   @default("On Duty")
+  avatar           String?
+  cases            Case[]
+  firs             Fir[]
+  assignments      CaseAssignmentHistory[]
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+}
+
+model Case {
+  id                String                  @id @default(uuid())
+  title             String
+  crimeType         String
+  priority          Priority
+  assignedOfficer   Officer                 @relation(fields: [officerId], references: [id])
+  officerId         String
+  location          String
+  status            CaseStatus
+  createdDate       DateTime                @default(now())
+  lastUpdated       DateTime                @updatedAt
+  firId             String?                 @unique
+  fir               Fir?                    @relation(fields: [firId], references: [id])
+  victims           Victim[]
+  suspects          Suspect[]
+  witnesses         Witness[]
+  evidence          Evidence[]
+  forensics         ForensicReport[]
+  timeline          Timeline[]
+  caseNotes         CaseNote[]
+  assignmentHistory CaseAssignmentHistory[]
+  workflowSteps     WorkflowStep[]
+  createdBy         String?
+  updatedBy         String?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+}
+
+model Fir {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  reporter    String
+  date        DateTime @default(now())
+  officerId   String
+  officer     Officer  @relation(fields: [officerId], references: [id])
+  case        Case?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Victim {
+  id        Int      @id @default(autoincrement())
+  caseId    String
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Suspect {
+  id        Int      @id @default(autoincrement())
+  caseId    String
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Witness {
+  id        Int      @id @default(autoincrement())
+  caseId    String
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  name      String
+  statement String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Evidence {
+  id                    String             @id @default(uuid())
+  caseId                String
+  case                  Case               @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  name                  String
+  category              EvidenceType
+  collectionDate        DateTime           @default(now())
+  collectedBy           String
+  verificationStatus    String
+  previewType           String
+  previewData           String
+  cloudinaryPublicId    String?
+  cloudinaryUrl         String?
+  cloudinaryFormat      String?
+  cloudinaryResourceType String?
+  transfers             EvidenceTransfer[]
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+}
+
+model EvidenceTransfer {
+  id         Int      @id @default(autoincrement())
+  evidenceId String
+  evidence   Evidence @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+  date       DateTime @default(now())
+  action     String
+  handler    String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model ForensicReport {
+  id           String    @id @default(uuid())
+  caseId       String
+  case         Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  type         String
+  analyst      String
+  status       String
+  summary      String
+  approvalDate String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model Timeline {
+  id        Int      @id @default(autoincrement())
+  caseId    String
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  step      String
+  date      DateTime @default(now())
+  completed Boolean  @default(false)
+  details   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CaseNote {
+  id        Int      @id @default(autoincrement())
+  caseId    String
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  note      String
+  author    String
+  timestamp DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Notification {
+  id        Int              @id @default(autoincrement())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message   String
+  isRead    Boolean          @default(false)
+  type      NotificationType @default(Info)
+  timestamp DateTime         @default(now())
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+}
+
+model AuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  role      String?
+  ipAddress String?
+  action    String
+  details   String?
+  device    String?
+  browser   String?
+  timestamp DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ActivityLog {
+  id        Int      @id @default(autoincrement())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action    String
+  timestamp DateTime @default(now())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OtpVerification {
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code      String
+  expires   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CaseAssignmentHistory {
+  id         String   @id @default(uuid())
+  caseId     String
+  case       Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  officerId  String
+  officer    Officer  @relation(fields: [officerId], references: [id], onDelete: Cascade)
+  assignedBy String?
+  assignedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model WorkflowStep {
+  id          String    @id @default(uuid())
+  caseId      String
+  case        Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  stepName    String
+  status      String    @default("Pending") // e.g. Pending, InProgress, Completed
+  assignedTo  String?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model SystemSetting {
+  key       String   @id
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
