@@ -222,21 +222,30 @@ router.post('/assign-inspector', authenticateToken, authorizeRoles('SUPER_ADMIN'
 // 4. Request Forensic Analysis (Inspector & Sub Inspector)
 router.post('/request-forensic', authenticateToken, authorizeRoles('SUPER_ADMIN', 'INSPECTOR', 'SUB_INSPECTOR'), asyncHandler(async (req: any, res: any) => {
   const { caseId } = req.body;
+  const officerId = req.user.officerId;
 
-  let targetCase = await prisma.case.findFirst({
-    where: {
-      OR: [
-        { id: caseId },
-        { firId: caseId }
-      ]
-    }
+  let targetCase = await prisma.case.findUnique({
+    where: { id: caseId }
   });
+
+  if (!targetCase) {
+    targetCase = await prisma.case.findFirst({
+      where: {
+        OR: [
+          { firId: caseId },
+          { fir: { id: caseId } }
+        ]
+      }
+    });
+  }
 
   if (!targetCase) {
     const assignment = await prisma.caseAssignmentHistory.findFirst({
       where: {
+        officerId: officerId,
         OR: [
           { caseId: caseId },
+          { id: caseId },
           { case: { firId: caseId } }
         ]
       },
@@ -244,6 +253,21 @@ router.post('/request-forensic', authenticateToken, authorizeRoles('SUPER_ADMIN'
     });
     if (assignment) {
       targetCase = assignment.case;
+    }
+  }
+
+  if (!targetCase) {
+    const userAssignments = await prisma.caseAssignmentHistory.findMany({
+      where: { officerId: officerId },
+      include: { case: true }
+    });
+    const matchedAssignment = userAssignments.find(
+      a => a.caseId === caseId || a.case.id === caseId || a.case.firId === caseId
+    );
+    if (matchedAssignment) {
+      targetCase = matchedAssignment.case;
+    } else if (userAssignments.length === 1 && (!caseId || caseId === 'null' || caseId === 'undefined')) {
+      targetCase = userAssignments[0].case;
     }
   }
 

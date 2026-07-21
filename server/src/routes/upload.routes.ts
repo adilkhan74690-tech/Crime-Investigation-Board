@@ -26,21 +26,29 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
     const userRole = req.user.role;
     const officerId = req.user.officerId;
 
-    // Lookup target Case using primary key id, firId, or assignment relation
-    let caseRecord = await prisma.case.findFirst({
-      where: {
-        OR: [
-          { id: caseId },
-          { firId: caseId }
-        ]
-      }
+    // Lookup target Case using database primary key id, firId, or CaseAssignmentHistory JOIN
+    let caseRecord = await prisma.case.findUnique({
+      where: { id: caseId }
     });
+
+    if (!caseRecord) {
+      caseRecord = await prisma.case.findFirst({
+        where: {
+          OR: [
+            { firId: caseId },
+            { fir: { id: caseId } }
+          ]
+        }
+      });
+    }
 
     if (!caseRecord) {
       const assignment = await prisma.caseAssignmentHistory.findFirst({
         where: {
+          officerId: officerId,
           OR: [
             { caseId: caseId },
+            { id: caseId },
             { case: { firId: caseId } }
           ]
         },
@@ -52,19 +60,31 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
     }
 
     if (!caseRecord) {
-      console.error(`[DEBUG UPLOAD ERROR] Assigned case not found for ID "${caseId}".`);
+      const userAssignments = await prisma.caseAssignmentHistory.findMany({
+        where: { officerId: officerId },
+        include: { case: true }
+      });
+      const matchedAssignment = userAssignments.find(
+        a => a.caseId === caseId || a.case.id === caseId || a.case.firId === caseId
+      );
+      if (matchedAssignment) {
+        caseRecord = matchedAssignment.case;
+      } else if (userAssignments.length === 1 && (!caseId || caseId === 'null' || caseId === 'undefined')) {
+        caseRecord = userAssignments[0].case;
+      }
+    }
+
+    if (!caseRecord) {
       throw new ApiError(404, 'Assigned case not found.');
     }
-    console.log('[DEBUG UPLOAD] Target Case verified:', { id: caseRecord.id, officerId: caseRecord.officerId });
+
     const targetCaseId = caseRecord.id;
 
     // Verify uploadedBy officer exists
     const officerUser = await prisma.user.findUnique({ where: { id: officerId } });
     if (!officerUser) {
-      console.error(`[DEBUG UPLOAD ERROR] Officer user ID "${officerId}" not found in database.`);
       throw new ApiError(404, `Officer user ID "${officerId}" not found in database.`);
     }
-    console.log('[DEBUG UPLOAD] Officer verified:', { id: officerUser.id, role: officerUser.role, name: officerUser.name });
 
     // Security Check for Evidence Upload Role-Based Access
     if (userRole === 'SUPER_ADMIN') {
@@ -78,7 +98,7 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
     if (userRole === 'SUB_INSPECTOR' || userRole === 'INSPECTOR') {
       const assignmentHistory = await prisma.caseAssignmentHistory.findFirst({
         where: {
-          caseId: caseRecord.id,
+          caseId: targetCaseId,
           officerId: officerId
         }
       });
@@ -86,8 +106,8 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
       const fir = await prisma.fir.findFirst({
         where: {
           OR: [
-            { id: caseRecord.id },
-            { case: { id: caseRecord.id } }
+            { id: targetCaseId },
+            { case: { id: targetCaseId } }
           ]
         }
       });
