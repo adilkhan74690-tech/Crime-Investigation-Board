@@ -74,8 +74,10 @@ model User {
   role                   Role
   department             Department
   isActive               Boolean          @default(true)
+  firstLogin             Boolean          @default(true)
   passwordChangeRequired Boolean          @default(false)
   passwordChanged        Boolean          @default(false)
+  passwordChangedAt      DateTime?
   phone                  String?
   policeStation          String?
   lastLogin              DateTime?
@@ -85,7 +87,6 @@ model User {
   auditLogs              AuditLog[]
   activityLogs           ActivityLog[]
   notifications          Notification[]
-  otpVerification        OtpVerification?
 }
 
 model Officer {
@@ -289,15 +290,6 @@ model ActivityLog {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   action    String
   timestamp DateTime @default(now())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model OtpVerification {
-  userId    String   @id
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  code      String
-  expires   DateTime
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

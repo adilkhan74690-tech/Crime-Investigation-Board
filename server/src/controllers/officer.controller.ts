@@ -299,7 +299,7 @@ export class OfficerController {
     await NotificationService.createNotification(id, `Role Changed: Your account has been ${suspend ? 'suspended' : 'activated'}.`, 'Alert').catch(console.error);
     await NotificationService.notifyAll(`Officer Suspended/Activated: Access control toggled for ${user.name} (${id}).`, 'Alert').catch(console.error);
 
-    res.json(formatResponse({ message: `Officer successfully ${suspend ? 'suspended' : 'activated'}.` }));
+    res.json(formatResponse({ message: `Officer ${suspend ? 'suspended' : 'activated'} successfully.` }));
   });
 
   public static resetPassword = asyncHandler(async (req: Request, res: Response) => {

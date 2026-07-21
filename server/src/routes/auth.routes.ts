@@ -6,9 +6,8 @@ import { authenticateToken } from '../middleware/auth';
 
 const router = Router();
 
-router.post('/request-otp', validateRequest(RequestOtpSchema), AuthController.requestOtp);
-router.post('/verify-otp', validateRequest(VerifyOtpSchema), AuthController.verifyOtp);
-router.post('/resend-otp', validateRequest(ResendOtpSchema), AuthController.resendOtp);
+router.post('/login', validateRequest(RequestOtpSchema), AuthController.login);
+router.post('/request-otp', validateRequest(RequestOtpSchema), AuthController.login);
 router.post('/change-password', validateRequest(ChangePasswordSchema), AuthController.changePassword);
 router.post('/logout', authenticateToken, AuthController.logout);
 

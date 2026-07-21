@@ -6,90 +6,60 @@ import { ApiError } from '../utils/apiError';
 import { prisma } from '../config/database';
 
 export class AuthService {
-  public static async requestOtp(officerId: string, password: string): Promise<{ message: string; passwordChangeRequired?: boolean; bypassOtp?: boolean; token?: string; refreshToken?: string; role?: string; name?: string }> {
-    if (!process.env.DATABASE_URL) {
-      throw new ApiError(500, 'Render Server Configuration Error: DATABASE_URL is not set.');
-    }
-    if (!process.env.JWT_SECRET) {
-      throw new ApiError(500, 'Render Server Configuration Error: JWT_SECRET is not set.');
-    }
-
+  public static async login(officerId: string, password: string): Promise<{ token?: string; refreshToken?: string; role?: string; name?: string; firstLogin?: boolean; passwordChangeRequired?: boolean; message?: string }> {
     const officer = await OfficerRepository.findById(officerId);
     if (!officer) {
-      throw new ApiError(401, 'Officer ID validation failure.');
+      throw new ApiError(401, 'Officer ID validation failure. Account not found.');
+    }
+
+    if (!officer.isActive) {
+      throw new ApiError(403, 'Account suspended. Contact Super Admin for clearance.');
     }
 
     const matches = await bcrypt.compare(password, officer.password).catch(() => password === officer.password);
     if (!matches && password !== officer.password) {
-      throw new ApiError(401, 'Password validation failure.');
+      throw new ApiError(401, 'Password validation failure. Invalid credentials.');
     }
 
-    if (officer.passwordChangeRequired) {
+    if (officer.firstLogin || officer.passwordChangeRequired || !officer.passwordChanged) {
       return {
-        message: 'First-time login: Password change required.',
-        passwordChangeRequired: true
-      };
-    }
-
-    // Completely bypass OTP flow for SUPER_ADMIN
-    if (officer.role === 'SUPER_ADMIN') {
-      const secret = process.env.JWT_SECRET || 'CIB_DEFAULT_CLASSIFIED_SECRET';
-      const token = jwt.sign(
-        { officerId: officer.id, role: officer.role, name: officer.name },
-        secret,
-        { expiresIn: '15m' }
-      );
-      const refreshToken = jwt.sign(
-        { officerId: officer.id, role: officer.role, name: officer.name },
-        secret,
-        { expiresIn: '7d' }
-      );
-      return {
-        message: 'OTP bypassed for Super Admin.',
-        bypassOtp: true,
-        token,
-        refreshToken,
+        message: 'First-time login: Temporary password detected. Password change required.',
+        firstLogin: true,
+        passwordChangeRequired: true,
         role: officer.role,
         name: officer.name
       };
     }
 
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expires = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes expiry
+    const secret = process.env.JWT_SECRET || 'CIB_DEFAULT_CLASSIFIED_SECRET';
+    const token = jwt.sign(
+      { officerId: officer.id, role: officer.role, name: officer.name },
+      secret,
+      { expiresIn: '12h' }
+    );
+    const refreshToken = jwt.sign(
+      { officerId: officer.id, role: officer.role, name: officer.name },
+      secret,
+      { expiresIn: '7d' }
+    );
 
-    // Save hashed OTP with expiry
-    const hashedOtp = await bcrypt.hash(otp, 10);
-    await prisma.otpVerification.upsert({
-      where: { userId: officer.id },
-      update: {
-        code: hashedOtp,
-        expires
-      },
-      create: {
-        userId: officer.id,
-        code: hashedOtp,
-        expires
-      }
+    await prisma.user.update({
+      where: { id: officer.id },
+      data: { lastLogin: new Date() }
     });
 
-    let mailSuccess = true;
-    try {
-      await MailService.sendOtpEmail(officer.email, officer.name, otp);
-      console.log(`[AUTH LOG] OTP email successfully dispatched to ${officer.email}`);
-    } catch (mailErr: any) {
-      mailSuccess = false;
-      console.error(`[AUTH LOG/WARNING] Failed to dispatch OTP email to ${officer.email}. Error: ${mailErr.message}`);
-      console.log(`[AUTH LOG/ALERT] RENDER STARTUP OTP FALLBACK CODE FOR ${officer.id}: ${otp}`);
-    }
-
-    return { 
-      message: mailSuccess 
-        ? 'OTP successfully dispatched.' 
-        : 'OTP email dispatch failed. Dynamic fallback OTP logged to server logs.' 
+    return {
+      message: 'Authentication successful.',
+      firstLogin: false,
+      passwordChangeRequired: false,
+      token,
+      refreshToken,
+      role: officer.role,
+      name: officer.name
     };
   }
 
-  public static async changePassword(officerId: string, oldPassword: string, newPassword: string): Promise<string> {
+  public static async changePassword(officerId: string, oldPassword: string, newPassword: string): Promise<{ token: string; refreshToken: string; role: string; name: string }> {
     const officer = await OfficerRepository.findById(officerId);
     if (!officer) {
       throw new ApiError(404, 'Officer ID validation failure.');
@@ -97,11 +67,7 @@ export class AuthService {
 
     const matches = await bcrypt.compare(oldPassword, officer.password).catch(() => oldPassword === officer.password);
     if (!matches && oldPassword !== officer.password) {
-      throw new ApiError(401, 'Current password validation failure.');
-    }
-
-    if (!officer.passwordChangeRequired && (officer as any).passwordChanged) {
-      throw new ApiError(400, 'Password change not required for this account.');
+      throw new ApiError(401, 'Current temporary password validation failure.');
     }
 
     // Complexity validation: min 8 chars, uppercase, lowercase, number, special char
@@ -116,51 +82,19 @@ export class AuthService {
       where: { id: officerId },
       data: {
         password: hashedPassword,
+        firstLogin: false,
         passwordChangeRequired: false,
-        passwordChanged: true
+        passwordChanged: true,
+        passwordChangedAt: new Date()
       } as any
     });
 
-    return 'Password successfully updated and verified. Proceed with login.';
-  }
-
-  public static async verifyOtp(officerId: string, code: string): Promise<{ token: string; refreshToken: string; role: string; name: string }> {
-    const otpRecord = await prisma.otpVerification.findUnique({
-      where: { userId: officerId }
-    });
-
-    if (!otpRecord) {
-      throw new ApiError(400, 'Authentication session expired or not initialized.');
-    }
-
-    if (new Date() > otpRecord.expires) {
-      await prisma.otpVerification.delete({ where: { userId: officerId } }).catch(() => {});
-      throw new ApiError(401, 'OTP verification code has expired.');
-    }
-
-    const matches = await bcrypt.compare(code, otpRecord.code);
-    if (!matches) {
-      throw new ApiError(401, 'Verification code mismatch.');
-    }
-
-    // Delete verification record after successful verify
-    await prisma.otpVerification.delete({ where: { userId: officerId } }).catch(() => {});
-
-    const officer = await OfficerRepository.findById(officerId);
-    if (!officer) {
-      throw new ApiError(404, 'Officer profile database mismatch.');
-    }
-
     const secret = process.env.JWT_SECRET || 'CIB_DEFAULT_CLASSIFIED_SECRET';
-    
-    // Access Token (short-lived)
     const token = jwt.sign(
       { officerId: officer.id, role: officer.role, name: officer.name },
       secret,
-      { expiresIn: '15m' }
+      { expiresIn: '12h' }
     );
-
-    // Refresh Token (long-lived)
     const refreshToken = jwt.sign(
       { officerId: officer.id, role: officer.role, name: officer.name },
       secret,
@@ -173,53 +107,5 @@ export class AuthService {
       role: officer.role,
       name: officer.name
     };
-  }
-
-  public static async resendOtp(officerId: string): Promise<string> {
-    const officer = await OfficerRepository.findById(officerId);
-    if (!officer) {
-      throw new ApiError(404, 'Officer profile not found.');
-    }
-
-    const otpRecord = await prisma.otpVerification.findUnique({
-      where: { userId: officerId }
-    });
-
-    if (!otpRecord) {
-      throw new ApiError(400, 'No active OTP verification session found.');
-    }
-
-    const now = Date.now();
-    const cooldown = new Date(otpRecord.updatedAt).getTime() + 30 * 1000;
-    if (now < cooldown) {
-      const remaining = Math.ceil((cooldown - now) / 1000);
-      throw new ApiError(429, `Resend threshold lock active. Retry in ${remaining} seconds.`);
-    }
-
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expires = new Date(Date.now() + 5 * 60 * 1000);
-
-    const hashedOtp = await bcrypt.hash(otp, 10);
-    await prisma.otpVerification.update({
-      where: { userId: officerId },
-      data: {
-        code: hashedOtp,
-        expires
-      }
-    });
-
-    let mailSuccess = true;
-    try {
-      await MailService.sendOtpEmail(officer.email, officer.name, otp);
-      console.log(`[AUTH LOG] Resent OTP email successfully to ${officer.email}`);
-    } catch (mailErr: any) {
-      mailSuccess = false;
-      console.error(`[AUTH LOG/WARNING] Failed to resend OTP email to ${officer.email}. Error: ${mailErr.message}`);
-      console.log(`[AUTH LOG/ALERT] RENDER STARTUP OTP FALLBACK CODE FOR ${officer.id}: ${otp}`);
-    }
-
-    return mailSuccess 
-      ? 'OTP verification code resent successfully.' 
-      : 'OTP resend email dispatch failed. Dynamic fallback OTP logged to server logs.';
   }
 }

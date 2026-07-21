@@ -212,96 +212,76 @@ async function handleLogin(event) {
   const officerId = document.getElementById('officer-id').value.trim();
   const password = document.getElementById('password').value;
 
+  if (!officerId || !password) {
+    triggerToast("Please enter Officer ID and Password.", "danger");
+    return;
+  }
+
   setAuthLoading(true);
-  if (!stage2FA) {
-    try {
-      const response = await fetch('/api/auth/request-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ officerId, password })
-      });
-      const data = await response.json();
-      if (response.ok) {
-        if (data.data && data.data.passwordChangeRequired) {
-          triggerToast("First-time login: Password update required.", "warning");
-          sessionStorage.setItem('cib_pending_officer_id', officerId);
-          document.getElementById('first-login-officer-id').textContent = officerId;
-          document.getElementById('first-login-officer-meta').textContent = `${officerId} (Official Account)`;
-          document.getElementById('first-login-old-password').value = password;
-          document.getElementById('first-login-new-password').value = '';
-          document.getElementById('first-login-confirm-password').value = '';
-          validateFirstLoginPasswordInputs();
-          showModal('modal-first-login-change-password');
-          setAuthLoading(false);
-          return;
-        }
-
-        if (data.data && data.data.bypassOtp) {
-          sessionStorage.setItem('cib_session_active', 'true');
-          sessionStorage.setItem('cib_jwt_token', data.data.token);
-          sessionStorage.setItem('cib_officer_id', officerId);
-          sessionStorage.setItem('cib_officer_role', data.data.role);
-          sessionStorage.setItem('cib_officer_name', data.data.name);
-          triggerToast(`Access Verified. Welcome ${data.data.name}. Redirecting...`, "success");
-          setTimeout(() => initDashboard(), 1000);
-          return;
-        }
-
-        triggerToast("One-time security verification code dispatched to registered officer device.", "success");
-        stage2FA = true;
-        document.getElementById('officer-id').disabled = true;
-        document.getElementById('password').disabled = true;
-        document.getElementById('otp-form-group').style.display = 'block';
-        document.querySelector('.otp-box').focus();
-      } else {
-        triggerToast(data.error || "Authentication verification failure.", "danger");
-      }
-    } catch (err) {
-      console.error(err);
-      triggerToast("Connection with CIB authentication backend failed.", "danger");
-    } finally {
-      setAuthLoading(false);
-    }
-  } else {
-    const otpBoxes = document.querySelectorAll('.otp-box');
-    let code = '';
-    otpBoxes.forEach(box => code += box.value);
-
-    if (code.length < 6) {
-      triggerToast("Please complete the 6-digit OTP verification code.", "danger");
-      setAuthLoading(false);
-      return;
-    }
-
-    try {
-      const response = await fetch('/api/auth/verify-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ officerId, code })
-      });
-      const data = await response.json();
-      
-      if (response.ok) {
-        sessionStorage.setItem('cib_session_active', 'true');
-        sessionStorage.setItem('cib_jwt_token', data.data.token);
-        sessionStorage.setItem('cib_officer_role', data.data.role);
-        sessionStorage.setItem('cib_officer_name', data.data.name);
-        sessionStorage.setItem('cib_officer_id', officerId);
-        
-        triggerToast(`Access Verified. Welcome ${data.data.name}. Redirecting...`, "success");
-        
-        setTimeout(() => {
-          initDashboard();
-        }, 1000);
-      } else {
-        triggerToast(data.error || "Incorrect security code verification.", "danger");
+  try {
+    const response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ officerId, password })
+    });
+    const data = await response.json();
+    if (response.ok && data.success) {
+      if (data.data && (data.data.firstLogin || data.data.passwordChangeRequired)) {
+        triggerToast("First-time login: Temporary password detected. Please set a new password.", "warning");
+        sessionStorage.setItem('cib_pending_officer_id', officerId);
+        document.getElementById('first-login-officer-id').textContent = officerId;
+        document.getElementById('first-login-officer-meta').textContent = `${data.data.name || officerId} (${data.data.role || 'Officer'})`;
+        document.getElementById('first-login-old-password').value = password;
+        document.getElementById('first-login-new-password').value = '';
+        document.getElementById('first-login-confirm-password').value = '';
+        validateFirstLoginPasswordInputs();
+        showModal('modal-first-login-change-password');
         setAuthLoading(false);
+        return;
       }
-    } catch (err) {
-      console.error(err);
-      triggerToast("Connection failed. Dynamic OTP code validation failed.", "danger");
-      setAuthLoading(false);
+
+      sessionStorage.setItem('cib_session_active', 'true');
+      sessionStorage.setItem('cib_jwt_token', data.data.token);
+      sessionStorage.setItem('cib_officer_id', officerId);
+      sessionStorage.setItem('cib_officer_role', data.data.role);
+      sessionStorage.setItem('cib_officer_name', data.data.name);
+      triggerToast(`Access Verified. Welcome ${data.data.name}. Redirecting...`, "success");
+      setTimeout(() => initDashboard(), 800);
+    } else {
+      triggerToast(data.error || data.message || "Authentication verification failure.", "danger");
     }
+  } catch (err) {
+    console.error(err);
+    triggerToast("Connection with CIB authentication backend failed.", "danger");
+  } finally {
+    setAuthLoading(false);
+  }
+}
+
+async function resetOfficerPassword(id) {
+  if (!confirm(`Are you sure you want to reset the password for Officer ${id}? A new temporary password will be generated.`)) return;
+  const token = sessionStorage.getItem('cib_jwt_token');
+
+  try {
+    const res = await fetch(`/api/officers/${id}/reset-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    const result = await res.json();
+    if (res.ok && result.success) {
+      document.getElementById('created-officer-id').textContent = result.data.id;
+      document.getElementById('created-officer-temp-password').textContent = result.data.tempPassword;
+      showModal('modal-officer-credentials');
+      triggerToast("Password reset successfully. Copy new temporary credentials.", "success");
+    } else {
+      triggerToast(result.error || "Password reset failed.", "danger");
+    }
+  } catch (err) {
+    console.error('Password reset error:', err);
+    triggerToast("Server connection error during password reset.", "danger");
   }
 }
 
@@ -3067,6 +3047,7 @@ window.handleRequestForensicSubmit = handleRequestForensicSubmit;
 window.showSubmitForensicModal = showSubmitForensicModal;
 window.handleSubmitForensicSubmit = handleSubmitForensicSubmit;
 window.copyOfficerCredentials = copyOfficerCredentials;
+window.resetOfficerPassword = resetOfficerPassword;
 window.togglePasswordVisibility = togglePasswordVisibility;
 window.validateFirstLoginPasswordInputs = validateFirstLoginPasswordInputs;
 window.handleFirstLoginPasswordChangeSubmit = handleFirstLoginPasswordChangeSubmit;

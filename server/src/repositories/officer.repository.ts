@@ -23,7 +23,11 @@ export class OfficerRepository {
       name: officer.user.name,
       password: officer.user.password,
       role: officer.user.role,
-      passwordChangeRequired: officer.user.passwordChangeRequired
+      isActive: officer.user.isActive,
+      firstLogin: officer.user.firstLogin,
+      passwordChangeRequired: officer.user.passwordChangeRequired,
+      passwordChanged: officer.user.passwordChanged,
+      passwordChangedAt: officer.user.passwordChangedAt
     };
   }
 
