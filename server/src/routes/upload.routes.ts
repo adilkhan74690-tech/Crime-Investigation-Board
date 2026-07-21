@@ -18,25 +18,8 @@ import crypto from 'crypto';
 // Handler function for Evidence File Upload with step-by-step diagnostic logging
 const handleEvidenceUpload = async (req: any, res: any, next: any) => {
   try {
-    console.log('[DEBUG UPLOAD] STEP 1: Request received:', {
-      user: req.user ? { officerId: req.user.officerId, role: req.user.role, name: req.user.name } : null,
-      body: req.body
-    });
-
-    // 1. Multer receives the uploaded file
-    if (!req.file) {
-      console.error('[DEBUG UPLOAD ERROR] STEP 1 FAILED: No file attached to upload request.');
-      throw new ApiError(400, 'No file attached to upload request.');
-    }
-    console.log('[DEBUG UPLOAD] STEP 1 SUCCESS: Multer received file:', {
-      originalname: req.file.originalname,
-      mimetype: req.file.mimetype,
-      size: req.file.size
-    });
-
     const { caseId, category, title, remarks } = req.body;
     if (!caseId) {
-      console.error('[DEBUG UPLOAD ERROR] STEP 1 FAILED: Missing target caseId or firId parameter.');
       throw new ApiError(400, 'Missing target caseId or firId parameter.');
     }
 
@@ -92,37 +75,26 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
       throw new ApiError(403, 'Permission Denied: Forensic Officers cannot upload evidence. You can only upload forensic reports.');
     }
 
-    if (userRole === 'SUB_INSPECTOR') {
-      const fir = await prisma.fir.findFirst({
+    if (userRole === 'SUB_INSPECTOR' || userRole === 'INSPECTOR') {
+      const assignmentHistory = await prisma.caseAssignmentHistory.findFirst({
         where: {
-          OR: [
-            { id: caseId },
-            { case: { id: caseId } }
-          ]
+          caseId: caseRecord.id,
+          officerId: officerId
         }
       });
-      const isAssignedFir = fir && fir.officerId && fir.officerId === officerId;
-      const isAssignedCase = caseRecord.officerId === officerId;
-
-      if (!isAssignedFir && !isAssignedCase) {
-        throw new ApiError(403, 'Security Clearance Denied: Sub-Inspectors can only upload evidence for cases/FIRs explicitly assigned to them.');
-      }
-    }
-
-    if (userRole === 'INSPECTOR') {
-      const isAssignedCase = caseRecord.officerId === officerId;
+      const isAssignedCase = caseRecord.officerId === officerId || !!assignmentHistory;
       const fir = await prisma.fir.findFirst({
         where: {
           OR: [
-            { id: caseId },
-            { case: { id: caseId } }
+            { id: caseRecord.id },
+            { case: { id: caseRecord.id } }
           ]
         }
       });
       const isAssignedFir = fir && fir.officerId && fir.officerId === officerId;
 
       if (!isAssignedCase && !isAssignedFir) {
-        throw new ApiError(403, 'Security Clearance Denied: Inspectors can only upload evidence for cases explicitly assigned to them.');
+        throw new ApiError(403, `Security Clearance Denied: ${userRole} can only upload evidence for cases explicitly assigned to them.`);
       }
     }
 
