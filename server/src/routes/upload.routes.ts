@@ -43,10 +43,30 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
     const userRole = req.user.role;
     const officerId = req.user.officerId;
 
-    // Verify the Case exists in database (strictly by database primary key id)
-    const caseRecord = await prisma.case.findUnique({
-      where: { id: caseId }
+    // Lookup target Case using primary key id, firId, or assignment relation
+    let caseRecord = await prisma.case.findFirst({
+      where: {
+        OR: [
+          { id: caseId },
+          { firId: caseId }
+        ]
+      }
     });
+
+    if (!caseRecord) {
+      const assignment = await prisma.caseAssignmentHistory.findFirst({
+        where: {
+          OR: [
+            { caseId: caseId },
+            { case: { firId: caseId } }
+          ]
+        },
+        include: { case: true }
+      });
+      if (assignment) {
+        caseRecord = assignment.case;
+      }
+    }
 
     if (!caseRecord) {
       console.error(`[DEBUG UPLOAD ERROR] Assigned case not found for ID "${caseId}".`);

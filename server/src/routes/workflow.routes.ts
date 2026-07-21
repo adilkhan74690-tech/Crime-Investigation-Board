@@ -223,12 +223,32 @@ router.post('/assign-inspector', authenticateToken, authorizeRoles('SUPER_ADMIN'
 router.post('/request-forensic', authenticateToken, authorizeRoles('SUPER_ADMIN', 'INSPECTOR', 'SUB_INSPECTOR'), asyncHandler(async (req: any, res: any) => {
   const { caseId } = req.body;
 
-  const targetCase = await prisma.case.findUnique({
-    where: { id: caseId }
+  let targetCase = await prisma.case.findFirst({
+    where: {
+      OR: [
+        { id: caseId },
+        { firId: caseId }
+      ]
+    }
   });
 
   if (!targetCase) {
-    throw new ApiError(404, 'Target case not found.');
+    const assignment = await prisma.caseAssignmentHistory.findFirst({
+      where: {
+        OR: [
+          { caseId: caseId },
+          { case: { firId: caseId } }
+        ]
+      },
+      include: { case: true }
+    });
+    if (assignment) {
+      targetCase = assignment.case;
+    }
+  }
+
+  if (!targetCase) {
+    throw new ApiError(404, 'Assigned case not found.');
   }
 
   const updatedCase = await prisma.case.update({
