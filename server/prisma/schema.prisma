@@ -75,6 +75,7 @@ model User {
   department             Department
   isActive               Boolean          @default(true)
   passwordChangeRequired Boolean          @default(false)
+  passwordChanged        Boolean          @default(false)
   phone                  String?
   policeStation          String?
   lastLogin              DateTime?

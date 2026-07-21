@@ -1680,10 +1680,18 @@ async function handleOfficerSubmit(event) {
     });
     const result = await response.json();
     if (response.ok && result.success) {
-      triggerToast(id ? "Officer updated successfully." : "Officer created successfully.", "success");
       hideModal('modal-officer-form');
       document.getElementById('officer-form').reset();
       await renderOfficersList();
+
+      if (!id && result.data && result.data.tempPassword) {
+        document.getElementById('created-officer-id').textContent = result.data.id || result.data.badgeNumber;
+        document.getElementById('created-officer-temp-password').textContent = result.data.tempPassword;
+        showModal('modal-officer-credentials');
+        triggerToast("Officer onboarded successfully. Copy temporary credentials.", "success");
+      } else {
+        triggerToast("Officer profile updated successfully.", "success");
+      }
     } else {
       triggerToast(result.error || "Operation failed.", "danger");
       if (result.error && result.error.toLowerCase().includes('email')) {
@@ -1696,6 +1704,71 @@ async function handleOfficerSubmit(event) {
   } finally {
     submitBtn.disabled = false;
     submitBtn.textContent = originalText;
+  }
+}
+
+function copyOfficerCredentials() {
+  const officerId = document.getElementById('created-officer-id').textContent;
+  const tempPassword = document.getElementById('created-officer-temp-password').textContent;
+  const textToCopy = `Officer ID: ${officerId}\nTemporary Password: ${tempPassword}`;
+
+  navigator.clipboard.writeText(textToCopy).then(() => {
+    triggerToast("Officer ID & Temporary Password copied to clipboard.", "success");
+  }).catch(err => {
+    console.error('Clipboard copy failed:', err);
+    triggerToast("Clipboard copy failed. Please manually select text.", "warning");
+  });
+}
+
+async function handleFirstLoginPasswordChangeSubmit(event) {
+  event.preventDefault();
+  const oldPassword = document.getElementById('first-login-old-password').value;
+  const newPassword = document.getElementById('first-login-new-password').value;
+  const confirmPassword = document.getElementById('first-login-confirm-password').value;
+
+  if (newPassword !== confirmPassword) {
+    triggerToast("New password and confirmation password do not match.", "danger");
+    return;
+  }
+
+  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$/;
+  if (!passwordRegex.test(newPassword)) {
+    triggerToast("Password must be at least 8 chars with uppercase, lowercase, number & special char.", "danger");
+    return;
+  }
+
+  const officerId = sessionStorage.getItem('cib_pending_officer_id') || sessionStorage.getItem('cib_officer_id');
+  const token = sessionStorage.getItem('cib_jwt_token');
+
+  const submitBtn = document.getElementById('first-login-password-submit-btn');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Updating Password...';
+
+  try {
+    const res = await fetch('/api/auth/change-password', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ officerId, oldPassword, newPassword })
+    });
+    const result = await res.json();
+    if (res.ok && result.success) {
+      triggerToast("Password successfully changed! Proceed with your new password.", "success");
+      hideModal('modal-first-login-change-password');
+      sessionStorage.removeItem('cib_pending_officer_id');
+      document.getElementById('first-login-password-form').reset();
+      window.location.reload();
+    } else {
+      triggerToast(result.error || "Password change failed.", "danger");
+    }
+  } catch (err) {
+    console.error(err);
+    triggerToast("Server connection error.", "danger");
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = `<i class="ri-key-line"></i> Change Password & Activate Access`;
   }
 }
 
@@ -2881,7 +2954,8 @@ window.showRequestForensicModal = showRequestForensicModal;
 window.handleRequestForensicSubmit = handleRequestForensicSubmit;
 window.showSubmitForensicModal = showSubmitForensicModal;
 window.handleSubmitForensicSubmit = handleSubmitForensicSubmit;
-window.deleteEvidenceRecord = deleteEvidenceRecord;
+window.copyOfficerCredentials = copyOfficerCredentials;
+window.handleFirstLoginPasswordChangeSubmit = handleFirstLoginPasswordChangeSubmit;
 window.showReviewCaseModal = showReviewCaseModal;
 window.handleReviewCaseSubmit = handleReviewCaseSubmit;
 window.approveChargesheet = approveChargesheet;

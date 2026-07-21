@@ -140,8 +140,21 @@ export class OfficerController {
       }
     }
 
-    // Auto-generate Temporary Password
-    const tempPassword = Math.random().toString(36).slice(-8) + 'A1!';
+    // Auto-generate Strong Temporary Password (10-12 characters)
+    const upperChars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const lowerChars = 'abcdefghijkmnopqrstuvwxyz';
+    const numChars = '23456789';
+    const specialChars = '!@#$%^&*';
+    const allChars = upperChars + lowerChars + numChars + specialChars;
+    let tempPassword = upperChars[Math.floor(Math.random() * upperChars.length)] +
+                       lowerChars[Math.floor(Math.random() * lowerChars.length)] +
+                       numChars[Math.floor(Math.random() * numChars.length)] +
+                       specialChars[Math.floor(Math.random() * specialChars.length)];
+    for (let i = 4; i < 11; i++) {
+      tempPassword += allChars[Math.floor(Math.random() * allChars.length)];
+    }
+    tempPassword = tempPassword.split('').sort(() => 0.5 - Math.random()).join('');
+
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
     const user = await prisma.$transaction(async (tx) => {
@@ -156,6 +169,7 @@ export class OfficerController {
           department,
           password: hashedPassword,
           passwordChangeRequired: true,
+          passwordChanged: false,
           isActive: true
         }
       });
@@ -184,14 +198,23 @@ export class OfficerController {
 
     await NotificationService.notifyAll(`Officer Onboarded: New official ${name} added under ID ${id}.`, 'System').catch(console.error);
 
-    // Send Welcome Email
-    try {
-      await MailService.sendWelcomeEmail(email, name, id, tempPassword);
-    } catch (error) {
-      console.error('Welcome email dispatch failed:', error);
-    }
-
-    res.json(formatResponse({ id, name, email, phone, role, rank, department, policeStation, isActive: true, createdAt: user.createdAt, badgeNumber: id }, 'Officer created successfully.'));
+    // Return tempPassword ONCE in response for Super Admin one-time credential modal
+    res.json(formatResponse({
+      id,
+      name,
+      email,
+      phone,
+      role,
+      rank,
+      department,
+      policeStation,
+      isActive: true,
+      passwordChangeRequired: true,
+      passwordChanged: false,
+      createdAt: user.createdAt,
+      badgeNumber: id,
+      tempPassword
+    }, 'Officer created successfully. Credentials generated.'));
   });
 
   public static updateOfficer = asyncHandler(async (req: Request, res: Response) => {

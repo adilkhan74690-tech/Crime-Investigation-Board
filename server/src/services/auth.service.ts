@@ -100,8 +100,14 @@ export class AuthService {
       throw new ApiError(401, 'Current password validation failure.');
     }
 
-    if (!officer.passwordChangeRequired) {
+    if (!officer.passwordChangeRequired && (officer as any).passwordChanged) {
       throw new ApiError(400, 'Password change not required for this account.');
+    }
+
+    // Complexity validation: min 8 chars, uppercase, lowercase, number, special char
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$/;
+    if (!passwordRegex.test(newPassword)) {
+      throw new ApiError(400, 'New password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.');
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
@@ -110,11 +116,12 @@ export class AuthService {
       where: { id: officerId },
       data: {
         password: hashedPassword,
-        passwordChangeRequired: false
-      }
+        passwordChangeRequired: false,
+        passwordChanged: true
+      } as any
     });
 
-    return 'Password successfully updated. Proceed with OTP verification login.';
+    return 'Password successfully updated and verified. Proceed with login.';
   }
 
   public static async verifyOtp(officerId: string, code: string): Promise<{ token: string; refreshToken: string; role: string; name: string }> {

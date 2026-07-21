@@ -1412,12 +1412,73 @@
             </div>
           </div>
           <div style="background-color: rgba(37,99,235,0.1); border: 1px solid rgba(37,99,235,0.2); padding: 12px; border-radius: 6px; font-size: 12px; color: var(--text-secondary);">
-            <i class="ri-information-line" style="color: var(--primary-color);"></i> On creation, a unique Officer ID and an encrypted temporary password will be auto-generated. Credentials will be dispatched directly to the officer's email. A forced password change is mandatory on first login.
+            <i class="ri-information-line" style="color: var(--primary-color);"></i> A unique Officer ID and temporary password will be generated. The credentials will be displayed once to the Super Admin after creation. The officer must change the password during first login.
           </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn-primary" style="background-color: transparent; border: 1px solid var(--border-light); color: var(--text-primary); width: auto;" onclick="hideModal('modal-officer-form')">Cancel</button>
           <button type="submit" class="btn-primary" style="width: auto;" id="officer-submit-btn">Create Officer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Officer Created One-Time Credentials Modal -->
+  <div id="modal-officer-credentials" class="modal-overlay">
+    <div class="modal-container" style="max-width: 450px;">
+      <div class="modal-header" style="border-bottom: 1px solid var(--border-color);">
+        <h3 class="modal-title" style="color: var(--success-color);"><i class="ri-checkbox-circle-line"></i> Officer Created Successfully</h3>
+        <button class="modal-close-btn" onclick="hideModal('modal-officer-credentials')"><i class="ri-close-line"></i></button>
+      </div>
+      <div class="modal-body" style="display: flex; flex-direction: column; gap: 16px; padding: 20px 0;">
+        <div style="background: var(--card-color); border: 1px solid var(--border-color); padding: 16px; border-radius: 8px; display: flex; flex-direction: column; gap: 12px;">
+          <div>
+            <span style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Officer ID:</span>
+            <div id="created-officer-id" style="font-size: 20px; font-family: monospace; font-weight: 700; color: var(--primary-color); margin-top: 2px;"></div>
+          </div>
+          <div style="border-top: 1px dashed var(--border-color); padding-top: 10px;">
+            <span style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.05em;">Temporary Password:</span>
+            <div id="created-officer-temp-password" style="font-size: 20px; font-family: monospace; font-weight: 700; color: #F59E0B; margin-top: 2px; letter-spacing: 0.05em;"></div>
+          </div>
+        </div>
+        <div style="background-color: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.25); padding: 12px; border-radius: 6px; font-size: 12px; color: #F59E0B; line-height: 1.5;">
+          <i class="ri-alert-line"></i> <strong>IMPORTANT:</strong> Copy these credentials now. This password will never be shown again. The officer must change the password during first login.
+        </div>
+      </div>
+      <div class="modal-footer" style="display: flex; gap: 10px;">
+        <button type="button" class="btn-primary" style="background-color: var(--primary-color); width: auto;" onclick="copyOfficerCredentials()"><i class="ri-file-copy-line"></i> Copy Credentials</button>
+        <button type="button" class="btn-primary" style="background-color: transparent; border: 1px solid var(--border-light); color: var(--text-primary); width: auto;" onclick="hideModal('modal-officer-credentials')">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Forced First Login Password Change Modal -->
+  <div id="modal-first-login-change-password" class="modal-overlay">
+    <div class="modal-container" style="max-width: 480px;">
+      <div class="modal-header" style="border-bottom: 1px solid var(--border-color);">
+        <h3 class="modal-title" style="color: var(--warning-color);"><i class="ri-lock-password-line"></i> Mandatory First Login Password Change</h3>
+      </div>
+      <form id="first-login-password-form" onsubmit="handleFirstLoginPasswordChangeSubmit(event)">
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 16px; padding: 20px 0;">
+          <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5;">Your account is operating on a temporary password. You must create a new permanent password before accessing the Crime Investigation Board.</p>
+          <div class="form-group">
+            <label class="form-label" for="first-login-old-password">Current Temporary Password</label>
+            <input type="password" id="first-login-old-password" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="first-login-new-password">New Password</label>
+            <input type="password" id="first-login-new-password" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="first-login-confirm-password">Confirm New Password</label>
+            <input type="password" id="first-login-confirm-password" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
+          </div>
+          <div style="background: rgba(37,99,235,0.08); border: 1px solid rgba(37,99,235,0.2); padding: 10px; border-radius: 6px; font-size: 11px; color: var(--text-secondary); line-height: 1.5;">
+            <strong>Password Requirements:</strong> Minimum 8 characters, at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character (!@#$%^&*).
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="submit" class="btn-primary" style="width: 100%; background-color: var(--success-color);" id="first-login-password-submit-btn"><i class="ri-key-line"></i> Change Password & Activate Access</button>
         </div>
       </form>
     </div>
