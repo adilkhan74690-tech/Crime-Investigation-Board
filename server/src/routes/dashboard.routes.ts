@@ -107,7 +107,19 @@ router.get('/dashboard-payload', authenticateToken, asyncHandler(async (req: any
     time: new Date(a.timestamp).toLocaleTimeString()
   }));
 
+  // Current user details
+  const dbUser = await prisma.user.findUnique({
+    where: { id: officerId }
+  });
+
   res.json(formatResponse({
+    currentUser: dbUser ? {
+      id: dbUser.id,
+      name: dbUser.name,
+      role: dbUser.role,
+      email: dbUser.email,
+      department: dbUser.department
+    } : null,
     cases,
     officers: formattedOfficers,
     evidence,

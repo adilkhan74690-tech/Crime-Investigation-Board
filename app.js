@@ -341,6 +341,10 @@ async function initDashboard() {
           priority: c.priority,
           done: false
         }));
+      if (payloadResult.data.currentUser) {
+        sessionStorage.setItem('cib_officer_role', payloadResult.data.currentUser.role);
+        sessionStorage.setItem('cib_officer_name', payloadResult.data.currentUser.name);
+      }
     } else {
       throw new Error(payloadResult.error || 'Server responded with failure status.');
     }
@@ -1509,6 +1513,88 @@ function hideModal(modalId) {
 
   if (previousActiveElement && typeof previousActiveElement.focus === 'function') {
     previousActiveElement.focus();
+  }
+}
+
+async function handleFirstLoginPasswordChangeSubmit(event) {
+  event.preventDefault();
+  const officerId = sessionStorage.getItem('cib_pending_officer_id') || document.getElementById('first-login-officer-id').textContent;
+  const oldPassword = document.getElementById('first-login-old-password').value;
+  const newPassword = document.getElementById('first-login-new-password').value;
+  const confirmPassword = document.getElementById('first-login-confirm-password').value;
+
+  const errorBox = document.getElementById('first-login-modal-error');
+  const errorText = document.getElementById('first-login-modal-error-text');
+
+  if (!newPassword || newPassword !== confirmPassword) {
+    if (errorBox && errorText) {
+      errorText.textContent = "New passwords do not match.";
+      errorBox.style.display = 'block';
+    } else {
+      triggerToast("New passwords do not match.", "danger");
+    }
+    return;
+  }
+
+  const submitBtn = document.getElementById('first-login-password-submit-btn');
+  const originalHtml = submitBtn.innerHTML;
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = `<i class="ri-loader-4-line spinner"></i> Establishing Credentials...`;
+
+  try {
+    // 1. Submit password change
+    const changeRes = await fetch('/api/auth/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ officerId, oldPassword, newPassword })
+    });
+
+    const changeData = await changeRes.json();
+    if (!changeRes.ok || !changeData.success) {
+      const errMsg = changeData.error || changeData.message || "Failed to update password.";
+      if (errorBox && errorText) {
+        errorText.textContent = errMsg;
+        errorBox.style.display = 'block';
+      } else {
+        triggerToast(errMsg, "danger");
+      }
+      return;
+    }
+
+    // 2. Invalidate temporary state completely and perform fresh login from DB
+    sessionStorage.removeItem('cib_pending_officer_id');
+    hideModal('modal-first-login-change-password');
+
+    const freshLoginRes = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ officerId, password: newPassword })
+    });
+
+    const freshLoginData = await freshLoginRes.json();
+    if (!freshLoginRes.ok || !freshLoginData.success) {
+      triggerToast("Password updated successfully. Please log in with your new password.", "success");
+      return;
+    }
+
+    // 3. Establish clean session with database-authenticated user profile
+    sessionStorage.setItem('cib_session_active', 'true');
+    sessionStorage.setItem('cib_jwt_token', freshLoginData.data.token);
+    sessionStorage.setItem('cib_officer_id', officerId);
+    sessionStorage.setItem('cib_officer_role', freshLoginData.data.role);
+    sessionStorage.setItem('cib_officer_name', freshLoginData.data.name);
+
+    triggerToast(`Password Established. Authenticated as ${freshLoginData.data.name} (${freshLoginData.data.role}).`, "success");
+    
+    // 4. Initialize dashboard dynamically for the authentic role
+    setTimeout(() => initDashboard(), 500);
+
+  } catch (err) {
+    console.error('Password change error:', err);
+    triggerToast("Server connection error during password update.", "danger");
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = originalHtml;
   }
 }
 
@@ -3609,6 +3695,7 @@ function renderSubInspectorRegistries() {
   }
 }
 
+window.handleFirstLoginPasswordChangeSubmit = handleFirstLoginPasswordChangeSubmit;
 window.showNotificationCenter = showNotificationCenter;
 window.markAllNotificationsRead = markAllNotificationsRead;
 window.markNotificationAsRead = markNotificationAsRead;
