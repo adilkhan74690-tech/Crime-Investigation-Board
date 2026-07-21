@@ -2234,6 +2234,10 @@ async function startFirInvestigation(firId) {
     } else {
       showCreateCaseFromFirModal(firId);
     }
+  } catch (err) {
+    console.error('Start investigation error:', err);
+    showCreateCaseFromFirModal(firId);
+  }
 }
 
 // Super Admin: Delete FIR or Case with confirmation modal
