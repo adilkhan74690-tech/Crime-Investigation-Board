@@ -1427,10 +1427,28 @@ async function fetchOfficers() {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     const result = await response.json();
+    
+    console.log('[Officer Audit] API URL called:', url);
+    console.log('[Officer Audit] Response status:', response.status);
+    console.log('[Officer Audit] Response body:', result);
+
     if (response.ok && result.success) {
-      window.CIB_DB.officers = result.data.officers || [];
+      const rawData = result.data;
+      let officersList = [];
+      let total = 0;
+
+      if (Array.isArray(rawData)) {
+        officersList = rawData;
+        total = rawData.length;
+      } else if (rawData && typeof rawData === 'object') {
+        officersList = rawData.officers || rawData.data || [];
+        total = rawData.total || officersList.length;
+      }
+
+      window.CIB_DB.officers = officersList;
       
-      const total = result.data.total || 0;
+      console.log('[Officer Audit] Number of officers received:', officersList.length, '| Total count:', total);
+
       const rangeEl = document.getElementById('officers-pagination-range');
       const totalEl = document.getElementById('officers-pagination-total');
       const startIndex = (officersPage - 1) * officersPageSize;
@@ -1441,7 +1459,7 @@ async function fetchOfficers() {
       triggerToast(result.error || "Failed to fetch officers list.", "danger");
     }
   } catch (err) {
-    console.error(err);
+    console.error('[Officer Audit] Fetch error:', err);
     triggerToast("Failed to connect to officers database.", "danger");
   }
 }
@@ -1459,6 +1477,7 @@ async function renderOfficersTable() {
 
   wrapErrorBoundary(() => {
     const paginated = window.CIB_DB.officers || [];
+    console.log('[Officer Audit] Number of officers rendered in table:', paginated.length);
 
     if (paginated.length === 0) {
       body.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-secondary); padding: 24px;">No officers found.</td></tr>`;

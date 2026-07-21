@@ -79,7 +79,9 @@ export class OfficerController {
       officer: u.officer
     }));
 
-    res.json(formatResponse(officers, 'Officers list fetched.'));
+    console.log(`[GET /api/officers] Database officer count: ${total} | API returned count: ${officers.length}`);
+
+    res.json(formatResponse({ officers, total }, 'Officers list fetched.'));
   });
 
   public static getOfficer = asyncHandler(async (req: Request, res: Response) => {
@@ -169,6 +171,8 @@ export class OfficerController {
       return newUser;
     });
 
+    console.log(`[POST /api/officers] Created new officer inserted into PostgreSQL with ID: ${id} | Name: ${name} | Email: ${email}`);
+
     // Write to audit log
     await logAudit(
       req,
@@ -187,7 +191,7 @@ export class OfficerController {
       console.error('Welcome email dispatch failed:', error);
     }
 
-    res.json(formatResponse({ id, name, email, role, department, idUser: user.id }));
+    res.json(formatResponse({ id, name, email, phone, role, rank, department, policeStation, isActive: true, createdAt: user.createdAt, badgeNumber: id }, 'Officer created successfully.'));
   });
 
   public static updateOfficer = asyncHandler(async (req: Request, res: Response) => {
