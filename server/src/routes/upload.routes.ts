@@ -51,9 +51,14 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
       apiSecret: apiSecret ? 'PRESENT' : 'MISSING'
     });
 
-    // 1. Verify the Case exists in database
-    const caseRecord = await prisma.case.findUnique({
-      where: { id: caseId }
+    // 1. Verify the Case exists in database (by primary key id or linked firId)
+    const caseRecord = await prisma.case.findFirst({
+      where: {
+        OR: [
+          { id: caseId },
+          { firId: caseId }
+        ]
+      }
     });
 
     if (!caseRecord) {

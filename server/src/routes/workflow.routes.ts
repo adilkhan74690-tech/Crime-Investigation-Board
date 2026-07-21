@@ -207,14 +207,29 @@ router.post('/assign-inspector', authenticateToken, authorizeRoles('SUPER_ADMIN'
   res.json(formatResponse(updatedCase, 'Inspector assigned successfully.'));
 }));
 
-// 4. Request Forensic Analysis (Inspector)
-router.post('/request-forensic', authenticateToken, authorizeRoles('SUPER_ADMIN', 'INSPECTOR'), asyncHandler(async (req: any, res: any) => {
+// 4. Request Forensic Analysis (Inspector & Sub Inspector)
+router.post('/request-forensic', authenticateToken, authorizeRoles('SUPER_ADMIN', 'INSPECTOR', 'SUB_INSPECTOR'), asyncHandler(async (req: any, res: any) => {
   const { reportId, caseId, type, summary } = req.body;
+
+  const targetCase = await prisma.case.findFirst({
+    where: {
+      OR: [
+        { id: caseId },
+        { firId: caseId }
+      ]
+    }
+  });
+
+  if (!targetCase) {
+    throw new ApiError(404, 'Target case not found for forensic analysis request.');
+  }
+
+  const validCaseId = targetCase.id;
 
   const report = await prisma.forensicReport.create({
     data: {
       id: reportId,
-      caseId,
+      caseId: validCaseId,
       type,
       analyst: req.user.name,
       status: 'Pending Analysis',
@@ -223,18 +238,18 @@ router.post('/request-forensic', authenticateToken, authorizeRoles('SUPER_ADMIN'
     }
   });
 
-  await logWorkflowAction(req, req.user.officerId, req.user.role, 'Forensic Requested', `Forensic analysis requested for case ${caseId}.`, caseId);
+  await logWorkflowAction(req, req.user.officerId, req.user.role, 'Forensic Requested', `Forensic analysis requested for case ${validCaseId}.`, validCaseId);
   
   await prisma.timeline.create({
     data: {
-      caseId,
+      caseId: validCaseId,
       step: 'Forensic Lab Analysis Requested',
       completed: true,
       details: `Type: ${type}. Ref ID: ${reportId}`
     }
   });
 
-  await NotificationService.notifyRole('FORENSIC_OFFICER', `Forensic Request: New analysis requested for case ${caseId}.`, 'Assignment').catch(console.error);
+  await NotificationService.notifyRole('FORENSIC_OFFICER', `Forensic Request: New analysis requested for case ${validCaseId}.`, 'Assignment').catch(console.error);
 
   res.json(formatResponse(report, 'Forensic report request generated.'));
 }));
