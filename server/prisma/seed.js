@@ -3,36 +3,23 @@ const bcrypt = require('bcrypt');
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('Seeding database tables...');
+  console.log('Verifying standard real officers...');
 
-  // Delete all existing data first to satisfy clean state
-  await prisma.activityLog.deleteMany({});
-  await prisma.auditLog.deleteMany({});
-  await prisma.notification.deleteMany({});
-  await prisma.caseNote.deleteMany({});
-  await prisma.timeline.deleteMany({});
-  await prisma.forensicReport.deleteMany({});
-  await prisma.evidenceTransfer.deleteMany({});
-  await prisma.evidence.deleteMany({});
-  await prisma.witness.deleteMany({});
-  await prisma.suspect.deleteMany({});
-  await prisma.victim.deleteMany({});
-  await prisma.caseAssignmentHistory.deleteMany({});
-  await prisma.workflowStep.deleteMany({});
-  await prisma.fir.deleteMany({});
-  await prisma.case.deleteMany({});
-  await prisma.officer.deleteMany({});
-  await prisma.user.deleteMany({});
+  const hashedPasswordAdil = await bcrypt.hash('Admin123!', 10);
+  const hashedPasswordMohit = await bcrypt.hash('Mohit123!', 10);
 
-  const hashedPassword = await bcrypt.hash('Admin123!', 10);
-
-  // Seed Super Admin user
-  await prisma.user.create({
-    data: {
+  // Ensure Super Admin user Adil exists
+  await prisma.user.upsert({
+    where: { id: 'SA-001' },
+    update: {
+      name: 'Adil',
+      role: 'SUPER_ADMIN'
+    },
+    create: {
       id: 'SA-001',
       email: 'adilkh468@gmail.com',
-      name: 'Adil Khan',
-      password: hashedPassword,
+      name: 'Adil',
+      password: hashedPasswordAdil,
       role: 'SUPER_ADMIN',
       department: 'MAJOR_CRIMES_DIVISION',
       firstLogin: false,
@@ -41,15 +28,47 @@ async function main() {
     }
   });
 
-  await prisma.officer.create({
-    data: {
+  await prisma.officer.upsert({
+    where: { id: 'SA-001' },
+    update: {},
+    create: {
       id: 'SA-001',
       rank: 'SUPERVISORY_SPECIAL_AGENT',
       avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=120'
     }
   });
 
-  console.log('Database tables seeded successfully with Super Admin user.');
+  // Ensure Sub Inspector user Mohit exists
+  await prisma.user.upsert({
+    where: { id: 'SI-MOHIT-001' },
+    update: {
+      name: 'Mohit',
+      role: 'SUB_INSPECTOR'
+    },
+    create: {
+      id: 'SI-MOHIT-001',
+      email: 'mohit@cib.gov',
+      name: 'Mohit',
+      password: hashedPasswordMohit,
+      role: 'SUB_INSPECTOR',
+      department: 'MAJOR_CRIMES_DIVISION',
+      firstLogin: false,
+      passwordChangeRequired: false,
+      passwordChanged: true
+    }
+  });
+
+  await prisma.officer.upsert({
+    where: { id: 'SI-MOHIT-001' },
+    update: {},
+    create: {
+      id: 'SI-MOHIT-001',
+      rank: 'DETECTIVE',
+      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=120'
+    }
+  });
+
+  console.log('Database verified with real officers: Adil (SUPER_ADMIN) and Mohit (SUB_INSPECTOR).');
 }
 
 main()
