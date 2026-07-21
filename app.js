@@ -933,12 +933,69 @@ function viewCaseFromActivity(caseId) {
   openCaseDetail(caseId);
 }
 
-// Render dynamic cases list
+// Render dynamic cases & FIRs list from PostgreSQL
 function renderCasesTable(filteredList = null) {
   const container = document.getElementById('cases-table-body');
   const ioContainer = document.getElementById('io-cases-table-body');
-  
-  const targetList = filteredList || window.CIB_DB.cases;
+
+  const activeRole = sessionStorage.getItem('cib_officer_role') || 'SUPER_ADMIN';
+
+  // Build unified dataset from live PostgreSQL FIRs & Cases
+  let items = [];
+
+  const firs = window.CIB_DB.firs || [];
+  const cases = window.CIB_DB.cases || [];
+
+  // Map FIRs
+  firs.forEach(f => {
+    const linkedCase = cases.find(c => c.firId === f.id || c.id === f.case?.id);
+    
+    let officerName = null;
+    let officerRole = null;
+
+    if (f.officer && f.officer.user) {
+      officerName = f.officer.user.name;
+      officerRole = f.officer.user.role;
+    } else if (linkedCase && linkedCase.assignedOfficer && linkedCase.assignedOfficer.user) {
+      officerName = linkedCase.assignedOfficer.user.name;
+      officerRole = linkedCase.assignedOfficer.user.role;
+    }
+
+    items.push({
+      id: f.id,
+      title: f.title,
+      crimeCategory: f.crimeCategory || 'General',
+      priority: linkedCase ? linkedCase.priority : 'Medium',
+      assignedOfficer: officerName,
+      assignedRole: officerRole,
+      status: f.status || 'Registered',
+      createdDate: f.createdAt || f.date,
+      location: f.location || 'N/A',
+      isFir: true,
+      linkedCaseId: linkedCase ? linkedCase.id : null
+    });
+  });
+
+  // Map standalone Cases not covered in FIRs
+  cases.forEach(c => {
+    if (!items.some(i => i.id === c.id || (c.firId && i.id === c.firId))) {
+      let officerName = c.assignedOfficer && c.assignedOfficer.user ? c.assignedOfficer.user.name : (typeof c.assignedOfficer === 'string' ? c.assignedOfficer : null);
+      items.push({
+        id: c.id,
+        title: c.title,
+        crimeCategory: c.crimeType || 'General',
+        priority: c.priority || 'Medium',
+        assignedOfficer: officerName,
+        status: c.status || 'Active',
+        createdDate: c.createdAt || c.createdDate,
+        location: c.location || 'N/A',
+        isFir: false,
+        linkedCaseId: c.id
+      });
+    }
+  });
+
+  const targetList = filteredList || items;
   const total = targetList.length;
   const startIndex = (casesPage - 1) * casesPageSize;
   const endIndex = startIndex + casesPageSize;
@@ -955,34 +1012,64 @@ function renderCasesTable(filteredList = null) {
     tbody.innerHTML = '';
     
     if (paginated.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-secondary); padding: 24px;">No investigations found.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-secondary); padding: 24px;">No investigation records found in PostgreSQL database.</td></tr>`;
       return;
     }
 
-    paginated.forEach(c => {
-      const officer = window.CIB_DB.officers.find(o => o.name === c.assignedOfficer || o.id === c.officerId);
-      const officerName = officer ? officer.name : 'Unassigned';
-      const avatarUrl = getAvatarSvg(officerName);
+    paginated.forEach(item => {
+      let officerHtml = '';
+      if (!item.assignedOfficer || item.assignedOfficer === 'Not Assigned' || item.assignedOfficer === 'Unassigned') {
+        officerHtml = `<span class="badge badge-warning" style="background-color: rgba(245, 158, 11, 0.15); color: #F59E0B; border: 1px solid rgba(245, 158, 11, 0.3); padding: 4px 10px; border-radius: 4px; font-size: 11px;">Not Assigned</span>`;
+      } else {
+        const avatarUrl = getAvatarSvg(item.assignedOfficer);
+        officerHtml = `
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <img src="${avatarUrl}" alt="${item.assignedOfficer}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border-light);">
+            <span style="font-weight: 500;">${item.assignedOfficer}</span>
+          </div>
+        `;
+      }
+
+      // Contextual Action Buttons (Requirements 8 & 9)
+      let actionBtnHtml = '';
+      if (item.status === 'Registered') {
+        if (activeRole === 'SUPER_ADMIN') {
+          actionBtnHtml = `<button class="btn-primary" style="padding: 6px 12px; font-size: 11px; width: auto; background-color: var(--primary-color);" onclick="showAssignSiModal('${item.id}')"><i class="ri-user-shared-line"></i> Assign SI</button>`;
+        } else {
+          actionBtnHtml = `<span class="badge" style="color: var(--text-secondary); font-size: 11px;">Registered</span>`;
+        }
+      } else if (item.status === 'Assigned to SI') {
+        if (activeRole === 'SUB_INSPECTOR' || activeRole === 'SUPER_ADMIN') {
+          actionBtnHtml = `<button class="btn-primary" style="padding: 6px 12px; font-size: 11px; width: auto; background-color: var(--success-color);" onclick="startFirInvestigation('${item.id}')"><i class="ri-play-circle-line"></i> Start Investigation</button>`;
+        } else {
+          actionBtnHtml = `<button class="btn-primary" style="padding: 6px 12px; font-size: 11px; width: auto; background-color: var(--border-light);" onclick="openCaseDetail('${item.linkedCaseId || item.id}')"><i class="ri-eye-line"></i> View</button>`;
+        }
+      } else if (item.status === 'Under Investigation' || item.status === 'Active') {
+        actionBtnHtml = `
+          <div style="display: flex; gap: 6px;">
+            <button class="btn-primary" style="padding: 6px 10px; font-size: 11px; width: auto;" onclick="openCaseDetail('${item.linkedCaseId || item.id}')"><i class="ri-folder-open-line"></i> Evidence</button>
+            <button class="btn-primary" style="padding: 6px 10px; font-size: 11px; width: auto; background-color: var(--warning-color);" onclick="showRequestForensicModal('${item.linkedCaseId || item.id}')"><i class="ri-flask-line"></i> Forensics</button>
+          </div>
+        `;
+      } else {
+        actionBtnHtml = `<button class="btn-primary" style="padding: 6px 12px; font-size: 11px; width: auto; background-color: var(--border-light);" onclick="openCaseDetail('${item.linkedCaseId || item.id}')"><i class="ri-file-list-3-line"></i> View Details</button>`;
+      }
+
+      const formattedDate = item.createdDate ? new Date(item.createdDate).toLocaleDateString() : 'N/A';
 
       const row = document.createElement('tr');
       row.style.transition = 'background-color 0.2s';
       row.innerHTML = `
-        <td data-label="Case ID"><strong style="color: var(--primary-color); font-family: monospace;">${c.id}</strong></td>
+        <td data-label="Case ID"><strong style="color: var(--primary-color); font-family: monospace;">${item.id}</strong></td>
         <td data-label="Title">
-          <div style="font-weight:600; color: #FFFFFF;">${c.title}</div>
-          <div style="font-size:11px; color:var(--text-secondary); margin-top: 2px;">${c.crimeType}</div>
+          <div style="font-weight:600; color: #FFFFFF;">${item.title}</div>
+          <div style="font-size:11px; color:var(--text-secondary); margin-top: 2px;">${item.crimeCategory}</div>
         </td>
-        <td data-label="Priority"><span class="badge ${c.priority === 'Critical' ? 'priority-critical' : (c.priority === 'High' ? 'priority-high' : 'priority-medium')}" style="border-radius: 4px; font-size: 11px; padding: 4px 10px;">${c.priority}</span></td>
-        <td data-label="Officer">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <img src="${avatarUrl}" alt="${officerName}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border-light);">
-            <span style="font-weight: 500;">${officerName}</span>
-          </div>
-        </td>
-        <td data-label="Location"><span style="color: var(--text-secondary); font-size: 13px;">${c.location}</span></td>
-        <td data-label="Status"><span class="badge ${c.status === 'Solved' ? 'badge-status-solved' : 'badge-status-active'}" style="border-radius: 12px; padding: 2px 10px; font-size: 11px;">${c.status}</span></td>
-        <td data-label="Updated"><span style="color: var(--text-secondary); font-size: 12px;">${c.lastUpdated}</span></td>
-        <td data-label="Action"><button class="btn-primary" style="padding: 8px 16px; font-size:12px; width:auto; border-radius: 6px;" onclick="openCaseDetail('${c.id}')">View workspace</button></td>
+        <td data-label="Priority"><span class="badge ${item.priority === 'Critical' ? 'priority-critical' : (item.priority === 'High' ? 'priority-high' : 'priority-medium')}" style="border-radius: 4px; font-size: 11px; padding: 4px 10px;">${item.priority}</span></td>
+        <td data-label="Officer">${officerHtml}</td>
+        <td data-label="Status"><span class="badge ${item.status === 'Solved' || item.status === 'Completed' ? 'badge-status-solved' : (item.status === 'Registered' ? 'badge-warning' : 'badge-status-active')}" style="border-radius: 12px; padding: 2px 10px; font-size: 11px;">${item.status}</span></td>
+        <td data-label="Created Date"><span style="color: var(--text-secondary); font-size: 12px;">${formattedDate}</span></td>
+        <td data-label="Actions">${actionBtnHtml}</td>
       `;
       tbody.appendChild(row);
     });
@@ -1975,48 +2062,170 @@ window.hideModal = hideModal;
 window.renderOfficersTable = renderOfficersTable;
 window.renderOfficersList = renderOfficersList;
 
-// Investigation Workflow Implementations
+// Investigation Workflow Implementations: Live PostgreSQL FIRs & Cases Synchronization
 async function fetchAndRenderFirs() {
-  const tbody = document.getElementById('si-firs-table-body');
-  if (!tbody) return;
+  const token = sessionStorage.getItem('cib_jwt_token');
+  try {
+    const [firRes, caseRes] = await Promise.all([
+      fetch('/api/firs', { headers: { 'Authorization': `Bearer ${token}` } }),
+      fetch('/api/cases', { headers: { 'Authorization': `Bearer ${token}` } })
+    ]);
+
+    if (firRes.ok) {
+      const firData = await firRes.json();
+      if (firData.success) {
+        window.CIB_DB.firs = firData.data || [];
+      }
+    }
+
+    if (caseRes.ok) {
+      const caseData = await caseRes.json();
+      if (caseData.success) {
+        window.CIB_DB.cases = caseData.data || [];
+      }
+    }
+
+    // Populate SI FIR table if present
+    const tbody = document.getElementById('si-firs-table-body');
+    if (tbody) {
+      tbody.innerHTML = '';
+      if (window.CIB_DB.firs.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-secondary); padding: 24px;">No FIR records registered in PostgreSQL database.</td></tr>`;
+      } else {
+        window.CIB_DB.firs.forEach(f => {
+          const tr = document.createElement('tr');
+          const hasCase = window.CIB_DB.cases.some(c => c.firId === f.id || c.id === f.case?.id);
+          const actionBtn = hasCase 
+            ? `<span class="badge badge-status-solved" style="padding: 4px 10px; font-size: 11px;"><i class="ri-checkbox-circle-line"></i> Case Opened</span>`
+            : `<button class="btn-primary" style="padding: 6px 12px; font-size:11px; width:auto;" onclick="showCreateCaseFromFirModal('${f.id}')"><i class="ri-folder-add-line"></i> Open Case</button>`;
+
+          const dateStr = f.date ? new Date(f.date).toLocaleDateString() : 'N/A';
+          tr.innerHTML = `
+            <td><strong style="color: var(--primary-color); font-family: monospace;">${f.id}</strong></td>
+            <td>${f.reporter}</td>
+            <td><span class="badge priority-medium" style="font-size:11px;">${f.crimeCategory || 'Other'}</span></td>
+            <td>${dateStr}</td>
+            <td>${f.location || 'N/A'}</td>
+            <td><span class="badge badge-status-active" style="font-size: 11px;">${f.status}</span></td>
+            <td style="text-align: right;">${actionBtn}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+    }
+
+    // Render Manage Cases table automatically
+    renderCasesTable();
+  } catch (err) {
+    console.error('[FIR/Case list] Fetch failed:', err);
+  }
+}
+
+// Super Admin: Show Assign SI Modal
+async function showAssignSiModal(firId) {
+  document.getElementById('assign-si-fir-id').value = firId;
+  const select = document.getElementById('assign-si-select');
+  const remarksInput = document.getElementById('assign-si-remarks');
+  if (remarksInput) remarksInput.value = '';
+
+  select.innerHTML = '<option value="">Loading Sub Inspector officers...</option>';
+  showModal('modal-assign-si');
 
   const token = sessionStorage.getItem('cib_jwt_token');
   try {
-    const response = await fetch('/api/firs', {
+    const res = await fetch('/api/officers', {
       headers: { 'Authorization': `Bearer ${token}` }
     });
-    const result = await response.json();
-    if (response.ok && result.success) {
-      window.CIB_DB.firs = result.data || [];
-      tbody.innerHTML = '';
-
-      if (window.CIB_DB.firs.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; color: var(--text-secondary); padding: 24px;">No FIR records registered.</td></tr>`;
+    const result = await res.json();
+    if (res.ok && result.success) {
+      const sis = (result.data || []).filter(o => o.user && o.user.role === 'SUB_INSPECTOR');
+      select.innerHTML = '<option value="">Select Sub Inspector...</option>';
+      if (sis.length === 0) {
+        select.innerHTML = '<option value="">No Sub Inspector Officers Available</option>';
         return;
       }
-
-      window.CIB_DB.firs.forEach(f => {
-        const tr = document.createElement('tr');
-        const hasCase = window.CIB_DB.cases.some(c => c.firId === f.id);
-        const actionBtn = hasCase 
-          ? `<span class="badge badge-status-solved" style="padding: 4px 10px; font-size: 11px;"><i class="ri-checkbox-circle-line"></i> Case Opened</span>`
-          : `<button class="btn-primary" style="padding: 6px 12px; font-size:11px; width:auto;" onclick="showCreateCaseFromFirModal('${f.id}')"><i class="ri-folder-add-line"></i> Open Case</button>`;
-
-        const dateStr = f.date ? new Date(f.date).toLocaleDateString() : 'N/A';
-        tr.innerHTML = `
-          <td><strong style="color: var(--primary-color); font-family: monospace;">${f.id}</strong></td>
-          <td>${f.reporter}</td>
-          <td><span class="badge priority-medium" style="font-size:11px;">${f.crimeCategory || 'Other'}</span></td>
-          <td>${dateStr}</td>
-          <td>${f.location || 'N/A'}</td>
-          <td><span class="badge badge-status-active" style="font-size: 11px;">${f.status}</span></td>
-          <td style="text-align: right;">${actionBtn}</td>
-        `;
-        tbody.appendChild(tr);
+      sis.forEach(o => {
+        const option = document.createElement('option');
+        option.value = o.id;
+        option.textContent = `${o.user.name} (${o.rank || 'Sub Inspector'} - ${o.id})`;
+        select.appendChild(option);
       });
+    } else {
+      select.innerHTML = '<option value="">Failed to fetch Sub Inspectors</option>';
     }
   } catch (err) {
-    console.error('[FIR list] Fetch failed:', err);
+    console.error('Error fetching SIs:', err);
+    select.innerHTML = '<option value="">Error loading officers</option>';
+  }
+}
+
+// Super Admin: Handle Assign SI Submission
+async function handleAssignSiSubmit(event) {
+  event.preventDefault();
+  const firId = document.getElementById('assign-si-fir-id').value;
+  const officerId = document.getElementById('assign-si-select').value;
+  const remarks = document.getElementById('assign-si-remarks').value;
+  const token = sessionStorage.getItem('cib_jwt_token');
+
+  if (!officerId) {
+    triggerToast("Please select a Sub Inspector to assign.", "danger");
+    return;
+  }
+
+  const submitBtn = document.getElementById('assign-si-submit-btn');
+  const originalHtml = submitBtn.innerHTML;
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = `<i class="ri-loader-4-line spinner"></i> Assigning...`;
+
+  try {
+    const response = await fetch(`/api/firs/${firId}/assign`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ officerId, remarks })
+    });
+
+    const result = await response.json();
+    if (response.ok && result.success) {
+      triggerToast(result.message || `FIR ${firId} assigned to SI.`, "success");
+      hideModal('modal-assign-si');
+      await fetchAndRenderFirs();
+    } else {
+      triggerToast(result.error || "Failed to assign SI.", "danger");
+    }
+  } catch (err) {
+    console.error('Assign SI submission error:', err);
+    triggerToast("Server connection error during assignment.", "danger");
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = originalHtml;
+  }
+}
+
+// Sub Inspector: Start Investigation on Assigned FIR
+async function startFirInvestigation(firId) {
+  const token = sessionStorage.getItem('cib_jwt_token');
+  try {
+    const res = await fetch(`/api/firs/${firId}/status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ status: 'Under Investigation' })
+    });
+    const result = await res.json();
+    if (res.ok && result.success) {
+      triggerToast(`Investigation initiated for FIR ${firId}. Status: Under Investigation.`, "success");
+      await fetchAndRenderFirs();
+    } else {
+      showCreateCaseFromFirModal(firId);
+    }
+  } catch (err) {
+    console.error('Start investigation error:', err);
+    showCreateCaseFromFirModal(firId);
   }
 }
 
@@ -2473,6 +2682,9 @@ window.showRegisterFirModal = showRegisterFirModal;
 window.showCreateCaseFromFirModal = showCreateCaseFromFirModal;
 window.handleFirSubmit = handleFirSubmit;
 window.fetchAndRenderFirs = fetchAndRenderFirs;
+window.showAssignSiModal = showAssignSiModal;
+window.handleAssignSiSubmit = handleAssignSiSubmit;
+window.startFirInvestigation = startFirInvestigation;
 window.showAssignInspectorModal = showAssignInspectorModal;
 window.handleAssignInspectorSubmit = handleAssignInspectorSubmit;
 window.showEvidenceUploadModal = showEvidenceUploadModal;

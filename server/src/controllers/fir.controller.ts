@@ -20,7 +20,6 @@ export class FirController {
     let generatedId = '';
     
     // Auto-generate a unique FIR Number: FIR-YYYY-000001
-    // Fetch last registered FIR for the year
     const lastFir = await prisma.fir.findFirst({
       where: {
         id: {
@@ -67,9 +66,10 @@ export class FirController {
       }
     }
 
-    const officerId = (req as any).user.officerId;
+    const creatorOfficerId = (req as any).user.officerId;
     const parsedDate = incidentDate ? new Date(incidentDate) : new Date();
 
+    // 1. REAL INVESTIGATION WORKFLOW: Status = Registered, assignedOfficer = null
     const fir = await prisma.fir.create({
       data: {
         id: generatedId,
@@ -81,21 +81,30 @@ export class FirController {
         crimeCategory: crimeCategory || null,
         location: location || null,
         status: 'Registered',
+        remarks: null,
         date: parsedDate,
-        officerId
+        officerId: null
+      },
+      include: {
+        officer: {
+          include: {
+            user: true
+          }
+        },
+        case: true
       }
     });
 
     await logAudit(
       req,
-      officerId,
+      creatorOfficerId,
       (req as any).user.role,
       'FIR Registered',
-      `Registered FIR ${generatedId} by Officer ID ${officerId}`
+      `Registered FIR ${generatedId}`
     ).catch(console.error);
 
     await NotificationService.notifyAll(
-      `New FIR Registered: Reference "${title}" (ID: ${generatedId}) logged.`,
+      `New FIR Registered: Reference "${title}" (ID: ${generatedId}) logged in system. Status: Registered.`,
       'Info'
     ).catch(console.error);
 
@@ -103,10 +112,127 @@ export class FirController {
   });
 
   public static listFirs = asyncHandler(async (req: Request, res: Response) => {
+    const userRole = (req as any).user.role;
+    const officerId = (req as any).user.officerId;
+
+    let whereCondition: any = {};
+
+    // 3. SUB INSPECTOR view: SI dashboard shows only FIRs assigned to that SI (or unassigned FIRs)
+    if (userRole === 'SUB_INSPECTOR') {
+      whereCondition = {
+        OR: [
+          { officerId: officerId },
+          { status: 'Registered' }
+        ]
+      };
+    }
+
     const firs = await prisma.fir.findMany({
+      where: whereCondition,
       orderBy: { createdAt: 'desc' },
-      include: { case: true }
+      include: {
+        officer: {
+          include: {
+            user: true
+          }
+        },
+        case: true
+      }
     });
     res.json(formatResponse(firs));
+  });
+
+  // 2. SUPER ADMIN: Assign SI to FIR
+  public static assignFir = asyncHandler(async (req: Request, res: Response) => {
+    const firId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const { officerId, remarks } = req.body;
+
+    if (!officerId) {
+      throw new ApiError(400, 'Officer ID is required for assignment.');
+    }
+
+    const targetOfficer = await prisma.officer.findUnique({
+      where: { id: officerId },
+      include: { user: true }
+    });
+
+    if (!targetOfficer || targetOfficer.user.role !== 'SUB_INSPECTOR') {
+      throw new ApiError(400, 'Assigned officer must exist and hold the role of SUB_INSPECTOR.');
+    }
+
+    const existingFir = await prisma.fir.findUnique({ where: { id: firId } });
+    if (!existingFir) {
+      throw new ApiError(404, 'FIR not found.');
+    }
+
+    const updatedFir = await prisma.fir.update({
+      where: { id: firId },
+      data: {
+        officerId,
+        status: 'Assigned to SI',
+        remarks: remarks || null
+      },
+      include: {
+        officer: {
+          include: {
+            user: true
+          }
+        },
+        case: true
+      }
+    });
+
+    const officerName = targetOfficer.user.name;
+
+    await logAudit(
+      req,
+      (req as any).user.officerId,
+      (req as any).user.role,
+      'FIR Assigned to SI',
+      `FIR ${firId} assigned to SI ${officerName} (${officerId})`
+    ).catch(console.error);
+
+    // Create notification: "FIR FIR-XXXXX assigned to SI <Officer Name>"
+    const notificationMsg = `FIR ${firId} assigned to SI ${officerName}`;
+    await NotificationService.createNotification(officerId, notificationMsg, 'Assignment').catch(console.error);
+    await NotificationService.notifyAll(`FIR ${firId} status updated to Assigned to SI (${officerName}).`, 'Info').catch(console.error);
+
+    res.json(formatResponse(updatedFir, `FIR successfully assigned to SI ${officerName}.`));
+  });
+
+  // Update FIR status (Start Investigation, Forward, etc.)
+  public static updateFirStatus = asyncHandler(async (req: Request, res: Response) => {
+    const firId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const { status, remarks } = req.body;
+
+    if (!status) {
+      throw new ApiError(400, 'Status is required.');
+    }
+
+    const updatedFir = await prisma.fir.update({
+      where: { id: firId },
+      data: {
+        status,
+        remarks: remarks !== undefined ? remarks : undefined
+      },
+      include: {
+        officer: {
+          include: {
+            user: true
+          }
+        },
+        case: true
+      }
+    });
+
+    await logAudit(
+      req,
+      (req as any).user.officerId,
+      (req as any).user.role,
+      'FIR Status Updated',
+      `FIR ${firId} status changed to ${status}`
+    ).catch(console.error);
+
+    res.json(formatResponse(updatedFir, `FIR status updated to ${status}.`));
   });
 }

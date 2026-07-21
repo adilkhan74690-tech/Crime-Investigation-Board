@@ -1619,6 +1619,35 @@
     </div>
   </div>
 
+  <!-- Assign SI Modal (Super Admin) -->
+  <div id="modal-assign-si" class="modal-overlay">
+    <div class="modal-container" style="max-width: 500px;">
+      <div class="modal-header">
+        <h3 class="modal-title"><i class="ri-user-shared-line"></i> Assign FIR to Sub Inspector</h3>
+        <button class="modal-close-btn" onclick="hideModal('modal-assign-si')"><i class="ri-close-line"></i></button>
+      </div>
+      <form id="assign-si-form" onsubmit="handleAssignSiSubmit(event)">
+        <input type="hidden" id="assign-si-fir-id">
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 16px;">
+          <div class="form-group">
+            <label class="form-label" for="assign-si-select">Select Sub Inspector (SI)</label>
+            <select id="assign-si-select" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
+              <option value="">Select Sub Inspector...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="assign-si-remarks">Assignment Remarks (Optional)</label>
+            <textarea id="assign-si-remarks" class="form-input" style="width: 100%; padding: 10px; height: 80px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px; resize: none;" placeholder="e.g. Priority investigation assigned by Super Admin."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-primary" style="background-color: transparent; border: 1px solid var(--border-light); color: var(--text-primary); width: auto;" onclick="hideModal('modal-assign-si')">Cancel</button>
+          <button type="submit" class="btn-primary" style="width: auto;" id="assign-si-submit-btn">Assign SI</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Assign Officer Modal -->
   <div id="modal-assign-inspector" class="modal-overlay">
     <div class="modal-container">

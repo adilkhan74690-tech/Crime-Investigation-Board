@@ -141,9 +141,10 @@ model Fir {
   crimeCategory      String?
   location           String?
   status             String   @default("Registered")
+  remarks            String?
   date               DateTime @default(now())
-  officerId          String
-  officer            Officer  @relation(fields: [officerId], references: [id])
+  officerId          String?
+  officer            Officer? @relation(fields: [officerId], references: [id])
   case               Case?
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
