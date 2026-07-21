@@ -36,7 +36,7 @@ export class OfficerController {
     }
 
     const pageNum = parseInt(page as string) || 1;
-    const limitNum = parseInt(limit as string) || 5;
+    const limitNum = limit ? parseInt(limit as string) : 100;
     const skipNum = (pageNum - 1) * limitNum;
 
     const sortField = (sortBy as string) || 'createdAt';
@@ -63,6 +63,7 @@ export class OfficerController {
     const officers = users.map(u => ({
       id: u.id,
       name: u.name,
+      badgeNumber: u.id,
       email: u.email,
       phone: u.phone,
       policeStation: u.policeStation,
@@ -73,15 +74,12 @@ export class OfficerController {
       createdAt: u.createdAt,
       rank: u.officer?.rank || null,
       availability: u.officer?.availability || null,
-      avatar: u.officer?.avatar || null
+      avatar: u.officer?.avatar || null,
+      user: u,
+      officer: u.officer
     }));
 
-    res.json(formatResponse({
-      officers,
-      total,
-      page: pageNum,
-      limit: limitNum
-    }));
+    res.json(formatResponse(officers, 'Officers list fetched.'));
   });
 
   public static getOfficer = asyncHandler(async (req: Request, res: Response) => {

@@ -8,5 +8,6 @@ router.post('/', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SUB_INSPECTOR
 router.get('/', authenticateToken, authorizeRoles('SUPER_ADMIN', 'INSPECTOR', 'SUB_INSPECTOR', 'SUPERINTENDENT'), FirController.listFirs);
 router.patch('/:id/assign', authenticateToken, authorizeRoles('SUPER_ADMIN'), FirController.assignFir);
 router.patch('/:id/status', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SUB_INSPECTOR', 'INSPECTOR', 'SUPERINTENDENT'), FirController.updateFirStatus);
+router.delete('/:id', authenticateToken, authorizeRoles('SUPER_ADMIN'), FirController.deleteFir);
 
 export default router;

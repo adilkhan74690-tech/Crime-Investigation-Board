@@ -1055,6 +1055,11 @@ function renderCasesTable(filteredList = null) {
         actionBtnHtml = `<button class="btn-primary" style="padding: 6px 12px; font-size: 11px; width: auto; background-color: var(--border-light);" onclick="openCaseDetail('${item.linkedCaseId || item.id}')"><i class="ri-file-list-3-line"></i> View Details</button>`;
       }
 
+      if (activeRole === 'SUPER_ADMIN') {
+        const deleteType = item.isFir ? 'fir' : 'case';
+        actionBtnHtml = `<div style="display: flex; align-items: center; gap: 6px;">${actionBtnHtml}<button class="btn-primary" style="padding: 6px 10px; font-size: 11px; width: auto; background-color: #EF4444;" onclick="deleteFirOrCase('${item.id}', '${deleteType}')"><i class="ri-delete-bin-line"></i> Delete</button></div>`;
+      }
+
       const formattedDate = item.createdDate ? new Date(item.createdDate).toLocaleDateString() : 'N/A';
 
       const row = document.createElement('tr');
@@ -2133,12 +2138,14 @@ async function showAssignSiModal(firId) {
 
   const token = sessionStorage.getItem('cib_jwt_token');
   try {
-    const res = await fetch('/api/officers', {
+    const res = await fetch('/api/officers?role=SUB_INSPECTOR&limit=100', {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     const result = await res.json();
     if (res.ok && result.success) {
-      const sis = (result.data || []).filter(o => o.user && o.user.role === 'SUB_INSPECTOR');
+      const rawData = Array.isArray(result.data) ? result.data : (result.data?.officers || []);
+      const sis = rawData.filter(o => o.role === 'SUB_INSPECTOR' || o.user?.role === 'SUB_INSPECTOR');
+
       select.innerHTML = '<option value="">Select Sub Inspector...</option>';
       if (sis.length === 0) {
         select.innerHTML = '<option value="">No Sub Inspector Officers Available</option>';
@@ -2146,8 +2153,12 @@ async function showAssignSiModal(firId) {
       }
       sis.forEach(o => {
         const option = document.createElement('option');
-        option.value = o.id;
-        option.textContent = `${o.user.name} (${o.rank || 'Sub Inspector'} - ${o.id})`;
+        const officerId = o.id || o.badgeNumber || o.officer?.id;
+        const displayName = o.name || o.user?.name || 'Sub Inspector';
+        const displayRank = o.rank || o.officer?.rank || 'SUB_INSPECTOR';
+
+        option.value = officerId;
+        option.textContent = `${displayName} (${displayRank} - ${officerId})`;
         select.appendChild(option);
       });
     } else {
@@ -2223,9 +2234,45 @@ async function startFirInvestigation(firId) {
     } else {
       showCreateCaseFromFirModal(firId);
     }
+}
+
+// Super Admin: Delete FIR or Case with confirmation modal
+function deleteFirOrCase(id, type = 'fir') {
+  document.getElementById('delete-target-id').textContent = id;
+  document.getElementById('delete-target-type').value = type;
+  showModal('modal-confirm-delete');
+}
+
+async function executeDeleteRecord() {
+  const id = document.getElementById('delete-target-id').textContent;
+  const type = document.getElementById('delete-target-type').value;
+  const token = sessionStorage.getItem('cib_jwt_token');
+
+  const btn = document.getElementById('confirm-delete-btn');
+  const originalHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<i class="ri-loader-4-line spinner"></i> Deleting...`;
+
+  try {
+    const endpoint = type === 'case' ? `/api/cases/${id}` : `/api/firs/${id}`;
+    const res = await fetch(endpoint, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const result = await res.json();
+    if (res.ok && result.success) {
+      triggerToast(result.message || `${id} permanently deleted.`, "success");
+      hideModal('modal-confirm-delete');
+      await fetchAndRenderFirs();
+    } else {
+      triggerToast(result.error || "Failed to delete record.", "danger");
+    }
   } catch (err) {
-    console.error('Start investigation error:', err);
-    showCreateCaseFromFirModal(firId);
+    console.error('Delete error:', err);
+    triggerToast("Server connection error during deletion.", "danger");
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
   }
 }
 
@@ -2685,6 +2732,8 @@ window.fetchAndRenderFirs = fetchAndRenderFirs;
 window.showAssignSiModal = showAssignSiModal;
 window.handleAssignSiSubmit = handleAssignSiSubmit;
 window.startFirInvestigation = startFirInvestigation;
+window.deleteFirOrCase = deleteFirOrCase;
+window.executeDeleteRecord = executeDeleteRecord;
 window.showAssignInspectorModal = showAssignInspectorModal;
 window.handleAssignInspectorSubmit = handleAssignInspectorSubmit;
 window.showEvidenceUploadModal = showEvidenceUploadModal;

@@ -235,4 +235,66 @@ export class FirController {
 
     res.json(formatResponse(updatedFir, `FIR status updated to ${status}.`));
   });
+
+  // Delete FIR and linked case records safely
+  public static deleteFir = asyncHandler(async (req: Request, res: Response) => {
+    const firId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+
+    const existingFir = await prisma.fir.findUnique({
+      where: { id: firId },
+      include: { case: true }
+    });
+
+    if (!existingFir) {
+      throw new ApiError(404, 'FIR record not found.');
+    }
+
+    const linkedCaseId = existingFir.case?.id;
+
+    if (linkedCaseId) {
+      await prisma.timeline.deleteMany({ where: { caseId: linkedCaseId } });
+      await prisma.caseNote.deleteMany({ where: { caseId: linkedCaseId } });
+      await prisma.forensicReport.deleteMany({ where: { caseId: linkedCaseId } });
+
+      const evidences = await prisma.evidence.findMany({ where: { caseId: linkedCaseId }, select: { id: true } });
+      const evidenceIds = evidences.map(e => e.id);
+      if (evidenceIds.length > 0) {
+        await prisma.evidenceTransfer.deleteMany({ where: { evidenceId: { in: evidenceIds } } });
+        await prisma.evidence.deleteMany({ where: { caseId: linkedCaseId } });
+      }
+
+      await prisma.witness.deleteMany({ where: { caseId: linkedCaseId } });
+      await prisma.suspect.deleteMany({ where: { caseId: linkedCaseId } });
+      await prisma.victim.deleteMany({ where: { caseId: linkedCaseId } });
+      await prisma.caseAssignmentHistory.deleteMany({ where: { caseId: linkedCaseId } });
+      await prisma.workflowStep.deleteMany({ where: { caseId: linkedCaseId } });
+
+      await prisma.notification.deleteMany({
+        where: {
+          OR: [
+            { message: { contains: linkedCaseId } },
+            { message: { contains: firId } }
+          ]
+        }
+      });
+
+      await prisma.case.delete({ where: { id: linkedCaseId } });
+    }
+
+    await prisma.notification.deleteMany({
+      where: { message: { contains: firId } }
+    });
+
+    await prisma.fir.delete({ where: { id: firId } });
+
+    await logAudit(
+      req,
+      (req as any).user.officerId,
+      (req as any).user.role,
+      'FIR Deleted',
+      `Permanently deleted FIR ${firId} and linked case records.`
+    ).catch(console.error);
+
+    res.json(formatResponse(null, `FIR ${firId} and associated records permanently deleted.`));
+  });
 }

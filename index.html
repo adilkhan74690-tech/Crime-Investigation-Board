@@ -1648,6 +1648,25 @@
     </div>
   </div>
 
+  <!-- Confirm Delete Modal -->
+  <div id="modal-confirm-delete" class="modal-overlay">
+    <div class="modal-container" style="max-width: 450px;">
+      <div class="modal-header" style="border-bottom: 1px solid var(--border-color);">
+        <h3 class="modal-title" style="color: #EF4444;"><i class="ri-delete-bin-line"></i> Confirm Permanent Deletion</h3>
+        <button class="modal-close-btn" onclick="hideModal('modal-confirm-delete')"><i class="ri-close-line"></i></button>
+      </div>
+      <div class="modal-body" style="padding: 20px 0; display: flex; flex-direction: column; gap: 12px;">
+        <p style="color: var(--text-primary); font-size: 14px;">Are you sure you want to permanently delete <strong id="delete-target-id" style="color: #EF4444; font-family: monospace;"></strong>?</p>
+        <p style="color: var(--text-secondary); font-size: 12px; line-height: 1.5;">This action will permanently delete all associated PostgreSQL records, evidence files, case notes, timeline events, and notifications. This operation cannot be undone.</p>
+        <input type="hidden" id="delete-target-type">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn-primary" style="background-color: transparent; border: 1px solid var(--border-light); color: var(--text-primary); width: auto;" onclick="hideModal('modal-confirm-delete')">Cancel</button>
+        <button type="button" class="btn-primary" style="background-color: #EF4444; width: auto;" id="confirm-delete-btn" onclick="executeDeleteRecord()"><i class="ri-delete-bin-line"></i> Delete Record</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Assign Officer Modal -->
   <div id="modal-assign-inspector" class="modal-overlay">
     <div class="modal-container">
