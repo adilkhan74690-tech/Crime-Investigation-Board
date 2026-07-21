@@ -2138,19 +2138,24 @@ async function showAssignSiModal(firId) {
 
   const token = sessionStorage.getItem('cib_jwt_token');
   try {
-    const res = await fetch('/api/officers?role=SUB_INSPECTOR&limit=100', {
+    const res = await fetch('/api/officers?role=SUB_INSPECTOR&status=active&limit=100', {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     const result = await res.json();
     if (res.ok && result.success) {
       const rawData = Array.isArray(result.data) ? result.data : (result.data?.officers || []);
-      const sis = rawData.filter(o => o.role === 'SUB_INSPECTOR' || o.user?.role === 'SUB_INSPECTOR');
+      const sis = rawData.filter(o => {
+        const role = o.role || o.user?.role;
+        const active = o.isActive !== false && (o.user ? o.user.isActive !== false : true);
+        return role === 'SUB_INSPECTOR' && active;
+      });
 
-      select.innerHTML = '<option value="">Select Sub Inspector...</option>';
       if (sis.length === 0) {
-        select.innerHTML = '<option value="">No Sub Inspector Officers Available</option>';
+        select.innerHTML = '<option value="">No Sub Inspectors available. Please create one first.</option>';
         return;
       }
+
+      select.innerHTML = '<option value="">Select Sub Inspector...</option>';
       sis.forEach(o => {
         const option = document.createElement('option');
         const officerId = o.id || o.badgeNumber || o.officer?.id;
@@ -2162,7 +2167,7 @@ async function showAssignSiModal(firId) {
         select.appendChild(option);
       });
     } else {
-      select.innerHTML = '<option value="">Failed to fetch Sub Inspectors</option>';
+      select.innerHTML = '<option value="">Error loading officers</option>';
     }
   } catch (err) {
     console.error('Error fetching SIs:', err);
