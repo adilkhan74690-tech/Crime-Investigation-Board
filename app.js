@@ -320,11 +320,23 @@ async function initDashboard() {
     if (response.ok && payloadResult.success) {
       // Hydrate local CIB database memory cache
       window.CIB_DB.cases = payloadResult.data.cases;
+      window.CIB_DB.firs = payloadResult.data.firs || [];
       window.CIB_DB.officers = payloadResult.data.officers;
       window.CIB_DB.evidence = payloadResult.data.evidence;
       window.CIB_DB.forensics = payloadResult.data.forensics;
       window.CIB_DB.recentActivities = payloadResult.data.activities;
+      window.CIB_DB.kpis = payloadResult.data.kpis || {};
       
+      // Update SI Dashboard counts directly from PostgreSQL payload
+      const siPendingEl = document.getElementById('si-pending-firs-count');
+      const siTotalCasesEl = document.getElementById('si-total-cases-count');
+      if (siPendingEl) {
+        siPendingEl.textContent = payloadResult.data.kpis?.siPendingFirs ?? 0;
+      }
+      if (siTotalCasesEl) {
+        siTotalCasesEl.textContent = payloadResult.data.kpis?.siTotalCases ?? 0;
+      }
+
       // Store notifications
       notifications = payloadResult.data.notifications || [];
       updateNotificationBell();
@@ -2640,6 +2652,8 @@ function showCreateCaseFromFirModal(firId) {
 
   // Setup officer dropdown
   const officerSelect = document.getElementById('fir-assigned-officer');
+  const currentOfficerId = sessionStorage.getItem('cib_officer_id');
+  const currentRole = sessionStorage.getItem('cib_officer_role');
   if (officerSelect) {
     officerSelect.innerHTML = '<option value="">Select Officer...</option>';
     (window.CIB_DB.officers || []).forEach(o => {
@@ -2648,6 +2662,9 @@ function showCreateCaseFromFirModal(firId) {
       option.textContent = `${o.name} (${o.role})`;
       officerSelect.appendChild(option);
     });
+    if (currentOfficerId && currentRole === 'SUB_INSPECTOR') {
+      officerSelect.value = currentOfficerId;
+    }
   }
 
   showModal('modal-register-fir');

@@ -65,6 +65,37 @@ router.get('/dashboard-payload', authenticateToken, asyncHandler(async (req: any
     orderBy: { timestamp: 'desc' }
   });
 
+  // Filter FIRs by role
+  let firWhereClause: any = {};
+  if (role === 'SUB_INSPECTOR') {
+    firWhereClause.officerId = officerId;
+  }
+  const firs = await prisma.fir.findMany({
+    where: firWhereClause,
+    orderBy: { createdAt: 'desc' },
+    include: { case: true, officer: { include: { user: true } } }
+  });
+
+  // Calculate Sub Inspector specific metrics
+  let siPendingFirsCount = 0;
+  let siTotalCasesCount = 0;
+  if (role === 'SUB_INSPECTOR') {
+    siPendingFirsCount = await prisma.fir.count({
+      where: {
+        officerId: officerId,
+        status: 'PENDING'
+      }
+    });
+    siTotalCasesCount = await prisma.case.count({
+      where: {
+        OR: [
+          { officerId: officerId },
+          { createdBy: officerId }
+        ]
+      }
+    });
+  }
+
   // Calculate dynamic department metrics
   const uniqueDepts = await prisma.user.groupBy({
     by: ['department']
@@ -121,6 +152,7 @@ router.get('/dashboard-payload', authenticateToken, asyncHandler(async (req: any
       department: dbUser.department
     } : null,
     cases,
+    firs,
     officers: formattedOfficers,
     evidence,
     forensics,
@@ -134,7 +166,9 @@ router.get('/dashboard-payload', authenticateToken, asyncHandler(async (req: any
       closedCases: solvedCasesCount,
       evidenceFiles: evidence.length,
       openFirs: totalFirsCount,
-      pendingReviews: pendingReviewsCount
+      pendingReviews: pendingReviewsCount,
+      siPendingFirs: siPendingFirsCount,
+      siTotalCases: siTotalCasesCount
     }
   }));
 }));
