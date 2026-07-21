@@ -13,7 +13,33 @@ export class CaseController {
     if (req.user?.role === 'INSPECTOR' || req.user?.role === 'SUB_INSPECTOR') {
       list = list.filter((c: any) => c.officerId === req.user?.officerId);
     }
-    res.json(formatResponse(list));
+    const formatted = list.map((c: any) => ({
+      id: c.id,
+      caseNumber: c.id,
+      title: c.title,
+      assignedOfficerId: c.officerId,
+      officerId: c.officerId,
+      status: c.status,
+      priority: c.priority,
+      crimeType: c.crimeType,
+      location: c.location,
+      createdDate: c.createdDate,
+      createdAt: c.createdAt,
+      firId: c.firId,
+      witnesses: c.witnesses,
+      timeline: c.timeline,
+      evidence: c.evidence,
+      forensics: c.forensics,
+      victims: c.victims,
+      suspects: c.suspects,
+      assignedOfficer: c.assignedOfficer ? {
+        id: c.assignedOfficer.id,
+        rank: c.assignedOfficer.rank,
+        name: c.assignedOfficer.user?.name,
+        email: c.assignedOfficer.user?.email
+      } : null
+    }));
+    res.json(formatResponse(formatted));
   });
 
   public static getCase = asyncHandler(async (req: AuthRequest, res: Response) => {

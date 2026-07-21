@@ -62,7 +62,9 @@ export class OfficerController {
 
     const officers = users.map(u => ({
       id: u.id,
+      officerId: u.id,
       name: u.name,
+      fullName: u.name,
       badgeNumber: u.id,
       email: u.email,
       phone: u.phone,

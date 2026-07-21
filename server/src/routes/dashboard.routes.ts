@@ -120,9 +120,12 @@ router.get('/dashboard-payload', authenticateToken, asyncHandler(async (req: any
 
   const formattedOfficers = officers.map(o => ({
     id: o.id,
+    officerId: o.id,
     name: o.user.name,
-    rank: o.rank,
+    fullName: o.user.name,
+    role: o.user.role,
     department: o.user.department,
+    rank: o.rank,
     assignedCases: o.assignedCases,
     solvedCases: o.solvedCases,
     performanceScore: o.performanceScore,
