@@ -14,7 +14,16 @@ const transporter = nodemailer.createTransport({
 });
 
 export class MailService {
+  private static isEmailEnabled(): boolean {
+    return process.env.MAIL_ENABLED === 'true' && process.env.NODE_ENV === 'production';
+  }
+
   public static async sendOtpEmail(to: string, name: string, otp: string): Promise<void> {
+    if (!MailService.isEmailEnabled()) {
+      console.log(`[MailService] Email sending skipped in development mode. Recipient: ${to}, OTP: ${otp}`);
+      return;
+    }
+
     const html = `
       <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0B1220; color: #FFFFFF; padding: 40px; border-radius: 12px; border: 1px solid #1F2937; max-width: 500px; margin: auto; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
         <div style="text-align: center; margin-bottom: 24px;">
@@ -50,6 +59,11 @@ export class MailService {
   }
 
   public static async sendWelcomeEmail(to: string, name: string, officerId: string, temporaryPassword: string): Promise<void> {
+    if (!MailService.isEmailEnabled()) {
+      console.log(`[MailService] Welcome email skipped in development mode. Officer ID: ${officerId}, Temp Password: ${temporaryPassword}`);
+      return;
+    }
+
     const html = `
       <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0B1220; color: #FFFFFF; padding: 40px; border-radius: 12px; border: 1px solid #1F2937; max-width: 500px; margin: auto; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
         <div style="text-align: center; margin-bottom: 24px;">
