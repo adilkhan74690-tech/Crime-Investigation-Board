@@ -1030,34 +1030,44 @@ function renderCasesTable(filteredList = null) {
         `;
       }
 
-      // Contextual Action Buttons (Requirements 8 & 9)
+      // Contextual Action Buttons (Role-based Workflow Matrix)
       let actionBtnHtml = '';
-      if (item.status === 'Registered') {
-        if (activeRole === 'SUPER_ADMIN') {
-          actionBtnHtml = `<button class="btn-primary" style="padding: 6px 12px; font-size: 11px; width: auto; background-color: var(--primary-color);" onclick="showAssignSiModal('${item.id}')"><i class="ri-user-shared-line"></i> Assign SI</button>`;
-        } else {
-          actionBtnHtml = `<span class="badge" style="color: var(--text-secondary); font-size: 11px;">Registered</span>`;
-        }
-      } else if (item.status === 'Assigned to SI') {
-        if (activeRole === 'SUB_INSPECTOR' || activeRole === 'SUPER_ADMIN') {
-          actionBtnHtml = `<button class="btn-primary" style="padding: 6px 12px; font-size: 11px; width: auto; background-color: var(--success-color);" onclick="startFirInvestigation('${item.id}')"><i class="ri-play-circle-line"></i> Start Investigation</button>`;
-        } else {
-          actionBtnHtml = `<button class="btn-primary" style="padding: 6px 12px; font-size: 11px; width: auto; background-color: var(--border-light);" onclick="openCaseDetail('${item.linkedCaseId || item.id}')"><i class="ri-eye-line"></i> View</button>`;
-        }
-      } else if (item.status === 'Under Investigation' || item.status === 'Active') {
-        actionBtnHtml = `
-          <div style="display: flex; gap: 6px;">
-            <button class="btn-primary" style="padding: 6px 10px; font-size: 11px; width: auto;" onclick="openCaseDetail('${item.linkedCaseId || item.id}')"><i class="ri-folder-open-line"></i> Evidence</button>
-            <button class="btn-primary" style="padding: 6px 10px; font-size: 11px; width: auto; background-color: var(--warning-color);" onclick="showRequestForensicModal('${item.linkedCaseId || item.id}')"><i class="ri-flask-line"></i> Forensics</button>
-          </div>
-        `;
-      } else {
-        actionBtnHtml = `<button class="btn-primary" style="padding: 6px 12px; font-size: 11px; width: auto; background-color: var(--border-light);" onclick="openCaseDetail('${item.linkedCaseId || item.id}')"><i class="ri-file-list-3-line"></i> View Details</button>`;
-      }
 
       if (activeRole === 'SUPER_ADMIN') {
-        const deleteType = item.isFir ? 'fir' : 'case';
-        actionBtnHtml = `<div style="display: flex; align-items: center; gap: 6px;">${actionBtnHtml}<button class="btn-primary" style="padding: 6px 10px; font-size: 11px; width: auto; background-color: #EF4444;" onclick="deleteFirOrCase('${item.id}', '${deleteType}')"><i class="ri-delete-bin-line"></i> Delete</button></div>`;
+        // SUPER_ADMIN: Register FIR, Assign/Reassign SI, View Case, Delete Case.
+        // NEVER SHOW: Start Investigation, Upload Evidence, Upload Forensic Report, Investigation Notes.
+        let assignBtn = `<button class="btn-primary" style="padding: 6px 12px; font-size: 11px; width: auto; background-color: var(--primary-color);" onclick="showAssignSiModal('${item.id}')"><i class="ri-user-shared-line"></i> ${item.assignedOfficer && item.assignedOfficer !== 'Not Assigned' ? 'Reassign SI' : 'Assign SI'}</button>`;
+        let viewBtn = `<button class="btn-primary" style="padding: 6px 12px; font-size: 11px; width: auto; background-color: var(--border-light);" onclick="openCaseDetail('${item.linkedCaseId || item.id}')"><i class="ri-eye-line"></i> View</button>`;
+        let deleteBtn = `<button class="btn-primary" style="padding: 6px 10px; font-size: 11px; width: auto; background-color: #EF4444;" onclick="deleteFirOrCase('${item.id}', '${item.isFir ? 'fir' : 'case'}')"><i class="ri-delete-bin-line"></i> Delete</button>`;
+        
+        actionBtnHtml = `<div style="display: flex; gap: 6px; align-items: center;">${assignBtn}${viewBtn}${deleteBtn}</div>`;
+      } else if (activeRole === 'SUB_INSPECTOR') {
+        // SUB_INSPECTOR: View assigned FIRs, Start Investigation, Upload Evidence, Send to Forensics, Notes.
+        if (item.status === 'Assigned to SI' || item.status === 'Registered') {
+          actionBtnHtml = `<button class="btn-primary" style="padding: 6px 12px; font-size: 11px; width: auto; background-color: var(--success-color);" onclick="startFirInvestigation('${item.id}')"><i class="ri-play-circle-line"></i> Start Investigation</button>`;
+        } else {
+          actionBtnHtml = `
+            <div style="display: flex; gap: 6px;">
+              <button class="btn-primary" style="padding: 6px 10px; font-size: 11px; width: auto;" onclick="showEvidenceUploadModal('${item.linkedCaseId || item.id}')"><i class="ri-upload-cloud-line"></i> Upload Evidence</button>
+              <button class="btn-primary" style="padding: 6px 10px; font-size: 11px; width: auto; background-color: var(--warning-color);" onclick="showRequestForensicModal('${item.linkedCaseId || item.id}')"><i class="ri-flask-line"></i> Send to Forensics</button>
+            </div>
+          `;
+        }
+      } else if (activeRole === 'FORENSIC_OFFICER') {
+        // FORENSIC_OFFICER: Upload Forensic Report, Complete Analysis.
+        actionBtnHtml = `
+          <div style="display: flex; gap: 6px;">
+            <button class="btn-primary" style="padding: 6px 10px; font-size: 11px; width: auto; background-color: var(--success-color);" onclick="showSubmitForensicModal('${item.linkedCaseId || item.id}', '${item.linkedCaseId || item.id}')"><i class="ri-file-upload-line"></i> Upload Report</button>
+          </div>
+        `;
+      } else if (activeRole === 'INSPECTOR') {
+        // INSPECTOR: Review SI Investigation, Approve / Reject / Return.
+        actionBtnHtml = `<button class="btn-primary" style="padding: 6px 12px; font-size: 11px; width: auto; background-color: var(--warning-color);" onclick="showReviewCaseModal('${item.linkedCaseId || item.id}')"><i class="ri-survey-line"></i> Review Case</button>`;
+      } else if (activeRole === 'SUPERINTENDENT') {
+        // SUPERINTENDENT: Final Approval, Generate Chargesheet, Close Case.
+        actionBtnHtml = `<button class="btn-primary" style="padding: 6px 12px; font-size: 11px; width: auto; background-color: var(--success-color);" onclick="approveChargesheet('${item.linkedCaseId || item.id}')"><i class="ri-file-shield-line"></i> Approve & Close</button>`;
+      } else {
+        actionBtnHtml = `<button class="btn-primary" style="padding: 6px 12px; font-size: 11px; width: auto; background-color: var(--border-light);" onclick="openCaseDetail('${item.linkedCaseId || item.id}')"><i class="ri-eye-line"></i> View</button>`;
       }
 
       const formattedDate = item.createdDate ? new Date(item.createdDate).toLocaleDateString() : 'N/A';

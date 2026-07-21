@@ -117,13 +117,27 @@ export class FirController {
 
     let whereCondition: any = {};
 
-    // 3. SUB INSPECTOR view: SI dashboard shows only FIRs assigned to that SI (or unassigned FIRs)
     if (userRole === 'SUB_INSPECTOR') {
       whereCondition = {
-        OR: [
-          { officerId: officerId },
-          { status: 'Registered' }
-        ]
+        officerId: officerId
+      };
+    } else if (userRole === 'FORENSIC_OFFICER') {
+      whereCondition = {
+        status: {
+          in: ['Sent to Forensics', 'Under Forensic Review', 'Forensic Report Submitted']
+        }
+      };
+    } else if (userRole === 'INSPECTOR') {
+      whereCondition = {
+        status: {
+          in: ['Under Investigation', 'Forensic Report Submitted', 'Inspector Review', 'Pending Approval']
+        }
+      };
+    } else if (userRole === 'SUPERINTENDENT') {
+      whereCondition = {
+        status: {
+          in: ['Inspector Review', 'Superintendent Approval', 'Chargesheet Ready', 'Pending Approval', 'Solved', 'Closed']
+        }
       };
     }
 
