@@ -68,7 +68,7 @@ router.post('/onboard-officer', authenticateToken, authorizeRoles('SUPER_ADMIN')
 
   await NotificationService.notifyAll(`Officer Onboarded: New official ${name} added under ID ${officerId}.`, 'System').catch(console.error);
 
-  res.json(formatResponse({ officerId, email, name, role, department, rank }, 'Officer onboarded successfully. Credentials emailed.'));
+  res.json(formatResponse({ officerId, email, name, role, department, rank, temporaryPassword }, 'Officer onboarded successfully. Credentials emailed.'));
 }));
 
 // Helper: Log workflow actions globally with role and IP address mapping

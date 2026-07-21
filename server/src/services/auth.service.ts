@@ -70,10 +70,8 @@ export class AuthService {
       throw new ApiError(401, 'Current temporary password validation failure.');
     }
 
-    // Complexity validation: min 8 chars, uppercase, lowercase, number, special char
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$/;
-    if (!passwordRegex.test(newPassword)) {
-      throw new ApiError(400, 'New password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.');
+    if (!newPassword || newPassword.length < 6) {
+      throw new ApiError(400, 'New password must be at least 6 characters long.');
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);

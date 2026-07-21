@@ -23,7 +23,7 @@ export const ResendOtpSchema = z.object({
 export const ChangePasswordSchema = z.object({
   body: z.object({
     officerId: z.string().min(1, 'Officer ID must be specified.'),
-    oldPassword: z.string().min(1, 'Current password required.'),
+    oldPassword: z.string().optional(),
     newPassword: z.string().min(6, 'New password must be at least 6 characters.')
   })
 });

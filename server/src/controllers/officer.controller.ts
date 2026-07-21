@@ -310,8 +310,8 @@ export class OfficerController {
       throw new ApiError(404, 'Officer not found.');
     }
 
-    // Auto-generate Temporary Password
-    const tempPassword = Math.random().toString(36).slice(-8) + 'A1!';
+    const { newPassword } = req.body || {};
+    const tempPassword = newPassword || (Math.random().toString(36).slice(-8) + 'A1!');
     const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
     await prisma.user.update({

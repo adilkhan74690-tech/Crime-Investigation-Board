@@ -6,7 +6,6 @@ async function main() {
   console.log('Seeding database tables...');
 
   // Delete all existing data first to satisfy clean state
-  await prisma.otpVerification.deleteMany({});
   await prisma.activityLog.deleteMany({});
   await prisma.auditLog.deleteMany({});
   await prisma.notification.deleteMany({});
@@ -36,7 +35,9 @@ async function main() {
       password: hashedPassword,
       role: 'SUPER_ADMIN',
       department: 'MAJOR_CRIMES_DIVISION',
-      passwordChangeRequired: false
+      firstLogin: false,
+      passwordChangeRequired: false,
+      passwordChanged: true
     }
   });
 

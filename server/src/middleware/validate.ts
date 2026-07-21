@@ -12,7 +12,8 @@ export const validateRequest = (schema: ZodObject<any>) => {
       });
       next();
     } catch (error: any) {
-      next(new ApiError(400, error.errors ? error.errors[0].message : 'Request parameter verification failed.'));
+      const msg = error.errors && error.errors.length > 0 ? error.errors.map((e: any) => `${e.path.join('.')}: ${e.message}`).join(', ') : 'Request parameter verification failed.';
+      next(new ApiError(400, msg));
     }
   };
 };
