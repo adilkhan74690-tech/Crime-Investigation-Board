@@ -414,7 +414,6 @@ async function initDashboard() {
   initRoomView();
   renderDepartmentsRegistry();
   renderSubInspectorRegistries();
-  fetchAndRenderFirs();
   
   // Switch to the first authorized view of the role
   const firstView = ROLE_PERMISSIONS[activeRole][0];
