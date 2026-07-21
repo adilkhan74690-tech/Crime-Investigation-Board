@@ -227,7 +227,6 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
         success: false,
         statusCode: err.statusCode,
         error: err.message,
-        details: err.details || null,
         stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
       });
     }
