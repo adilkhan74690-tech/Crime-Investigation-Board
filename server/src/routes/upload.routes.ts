@@ -51,28 +51,17 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
       apiSecret: apiSecret ? 'PRESENT' : 'MISSING'
     });
 
-    // 5. Verify target case exists or resolve FIR reference
-    let targetCaseId = caseId;
-    const targetCase = await prisma.case.findFirst({
-      where: {
-        OR: [
-          { id: caseId },
-          { firId: caseId }
-        ]
-      }
+    // 1. Verify the Case exists in database
+    const caseRecord = await prisma.case.findUnique({
+      where: { id: caseId }
     });
 
-    if (targetCase) {
-      targetCaseId = targetCase.id;
-      console.log('[DEBUG UPLOAD] STEP 5: Target Case verified:', { id: targetCase.id, officerId: targetCase.officerId });
-    } else {
-      const targetFir = await prisma.fir.findUnique({ where: { id: caseId } });
-      if (!targetFir) {
-        console.error(`[DEBUG UPLOAD ERROR] STEP 5 FAILED: Target Case or FIR ID "${caseId}" not found in database.`);
-        throw new ApiError(404, `Target Case or FIR ID "${caseId}" not found in database.`);
-      }
-      console.log('[DEBUG UPLOAD] STEP 5: Target FIR verified:', { id: targetFir.id, officerId: targetFir.officerId });
+    if (!caseRecord) {
+      console.error(`[DEBUG UPLOAD ERROR] Assigned case not found for ID "${caseId}".`);
+      throw new ApiError(404, 'Assigned case not found.');
     }
+    console.log('[DEBUG UPLOAD] Target Case verified:', { id: caseRecord.id, officerId: caseRecord.officerId });
+    const targetCaseId = caseRecord.id;
 
     // 6. Verify uploadedBy officer exists
     const officerUser = await prisma.user.findUnique({ where: { id: officerId } });
@@ -101,7 +90,7 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
         }
       });
       const isAssignedFir = fir && fir.officerId && fir.officerId === officerId;
-      const isAssignedCase = targetCase && targetCase.officerId === officerId;
+      const isAssignedCase = caseRecord.officerId === officerId;
 
       if (!isAssignedFir && !isAssignedCase) {
         throw new ApiError(403, 'Security Clearance Denied: Sub-Inspectors can only upload evidence for cases/FIRs explicitly assigned to them.');
@@ -109,7 +98,7 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
     }
 
     if (userRole === 'INSPECTOR') {
-      const isAssignedCase = targetCase && targetCase.officerId === officerId;
+      const isAssignedCase = caseRecord.officerId === officerId;
       const fir = await prisma.fir.findFirst({
         where: {
           OR: [
@@ -155,7 +144,7 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
     const evidenceRecord = await prisma.evidence.create({
       data: {
         id: evidenceId,
-        caseId: targetCaseId,
+        caseId: caseRecord.id,
         name: title || req.file.originalname,
         category: validCategory,
         collectionDate: new Date(),
@@ -189,10 +178,10 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
     console.log('[DEBUG UPLOAD] STEP 7 SUCCESS: Prisma evidence inserted successfully:', evidenceRecord.id);
 
     // Log Timeline step if case exists
-    if (targetCase) {
+    if (caseRecord) {
       await prisma.timeline.create({
         data: {
-          caseId: targetCaseId,
+          caseId: caseRecord.id,
           step: 'Evidence Uploaded',
           completed: true,
           details: `File "${req.file.originalname}" (${(req.file.size / 1024).toFixed(1)} KB) uploaded by ${req.user.name}`
@@ -202,13 +191,13 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
 
     // Update FIR / Case status automatically
     await prisma.fir.updateMany({
-      where: { OR: [{ id: caseId }, { id: targetCaseId }, { case: { id: targetCaseId } }] },
+      where: { OR: [{ id: caseId }, { id: caseRecord.id }, { case: { id: caseRecord.id } }] },
       data: { status: 'Evidence Uploaded' }
     }).catch((e) => console.error('[DEBUG UPLOAD FIR UPDATE ERROR]', e));
 
     // Audit Log & Notification
-    await logAudit(req, officerId, userRole, 'Evidence Uploaded', `Uploaded file ${req.file.originalname} for case ${targetCaseId}`, targetCaseId).catch(console.error);
-    await NotificationService.notifyAll(`Evidence uploaded for ${targetCaseId}: "${title || req.file.originalname}" by ${req.user.name}.`, 'Info').catch(console.error);
+    await logAudit(req, officerId, userRole, 'Evidence Uploaded', `Uploaded file ${req.file.originalname} for case ${caseRecord.id}`, caseRecord.id).catch(console.error);
+    await NotificationService.notifyAll(`Evidence uploaded for ${caseRecord.id}: "${title || req.file.originalname}" by ${req.user.name}.`, 'Info').catch(console.error);
 
     // 8. Return final response
     console.log('[DEBUG UPLOAD] STEP 8: Returning successful final response for:', evidenceRecord.id);
