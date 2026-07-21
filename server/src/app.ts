@@ -36,6 +36,7 @@ app.use('/api/cases', caseRoutes);
 app.use('/api/forensics', forensicsRoutes);
 app.use('/api/token', tokenRoutes);
 app.use('/api/files', uploadRoutes);
+app.use('/api/evidence', uploadRoutes);
 app.use('/api/workflow', workflowRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/dashboard', dashboardRoutes);

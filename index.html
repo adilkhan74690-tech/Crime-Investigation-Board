@@ -1700,23 +1700,40 @@
         <input type="hidden" id="evidence-case-id">
         <div class="modal-body" style="display: flex; flex-direction: column; gap: 16px;">
           <div class="form-group">
-            <label class="form-label" for="evidence-file-input">Select File</label>
-            <input type="file" id="evidence-file-input" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
+            <label class="form-label" for="evidence-title-input">Evidence Title / Name</label>
+            <input type="text" id="evidence-title-input" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" placeholder="e.g. CCTV Surveillance Footage Footstep Scan" required>
           </div>
           <div class="form-group">
             <label class="form-label" for="evidence-category-select">Evidence Category</label>
             <select id="evidence-category-select" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
-              <option value="DigitalHardware">Digital Hardware</option>
-              <option value="Weapon">Weapon</option>
-              <option value="Document">Document</option>
-              <option value="Narcotics">Narcotics</option>
-              <option value="Other">Other</option>
+              <option value="DigitalHardware">Digital Hardware / Media</option>
+              <option value="Weapon">Weapon / Ballistics</option>
+              <option value="Document">Document / Paper Trial</option>
+              <option value="Narcotics">Narcotics / Chemical Sample</option>
+              <option value="Other">Other Material Evidence</option>
             </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="evidence-file-input">Select File (Max 25MB: JPG, PNG, WEBP, PDF, DOC/DOCX, MP4)</label>
+            <input type="file" id="evidence-file-input" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" accept="image/*,.pdf,.doc,.docx,.mp4" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="evidence-remarks-input">Chain of Custody Remarks / Notes</label>
+            <textarea id="evidence-remarks-input" class="form-input" style="width: 100%; padding: 10px; height: 70px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px; resize: none;" placeholder="e.g. Recovered from crime scene safe box #3 by SI."></textarea>
+          </div>
+          <div id="evidence-progress-container" style="display: none; flex-direction: column; gap: 6px;">
+            <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary);">
+              <span>Uploading to Cloudinary & PostgreSQL...</span>
+              <span id="evidence-progress-text">0%</span>
+            </div>
+            <div style="width: 100%; background: var(--border-color); height: 8px; border-radius: 4px; overflow: hidden;">
+              <div id="evidence-progress-bar" style="width: 0%; height: 100%; background: var(--primary-color); transition: width 0.2s;"></div>
+            </div>
           </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn-primary" style="background-color: transparent; border: 1px solid var(--border-light); color: var(--text-primary); width: auto;" onclick="hideModal('modal-evidence-upload')">Cancel</button>
-          <button type="submit" class="btn-primary" style="width: auto;">Upload & Index</button>
+          <button type="submit" class="btn-primary" style="width: auto;" id="evidence-upload-submit-btn">Upload & Index</button>
         </div>
       </form>
     </div>
@@ -1762,22 +1779,42 @@
   <div id="modal-submit-forensic" class="modal-overlay">
     <div class="modal-container">
       <div class="modal-header">
-        <h3 class="modal-title"><i class="ri-file-upload-line"></i> Submit Forensic Findings</h3>
+        <h3 class="modal-title"><i class="ri-file-upload-line"></i> Upload Forensic Report & Findings</h3>
         <button class="modal-close-btn" onclick="hideModal('modal-submit-forensic')"><i class="ri-close-line"></i></button>
       </div>
       <form id="submit-forensic-form" onsubmit="handleSubmitForensicSubmit(event)">
         <input type="hidden" id="submit-report-id">
+        <input type="hidden" id="submit-report-case-id">
         <div class="modal-body" style="display: flex; flex-direction: column; gap: 16px;">
           <div class="form-group">
-            <label class="form-label" for="submit-forensic-summary">Laboratory Findings Summary</label>
-            <textarea id="submit-forensic-summary" class="form-input" style="width: 100%; padding: 10px; height: 120px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px; resize: none;" placeholder="Summarize your forensic findings here..." required></textarea>
+            <label class="form-label" for="submit-forensic-title">Report Title</label>
+            <input type="text" id="submit-forensic-title" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" placeholder="e.g. Comprehensive DNA Panel Match Report" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="submit-forensic-file">Attach Report Document (PDF, DOCX, Images)</label>
+            <input type="file" id="submit-forensic-file" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" accept=".pdf,.docx,image/*">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="submit-forensic-summary">Laboratory Findings & Observations</label>
+            <textarea id="submit-forensic-summary" class="form-input" style="width: 100%; padding: 10px; height: 100px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px; resize: none;" placeholder="Detailed forensic observations and conclusions..." required></textarea>
+          </div>
+          <div id="forensic-progress-container" style="display: none; flex-direction: column; gap: 6px;">
+            <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary);">
+              <span>Uploading Forensic Report...</span>
+              <span id="forensic-progress-text">0%</span>
+            </div>
+            <div style="width: 100%; background: var(--border-color); height: 8px; border-radius: 4px; overflow: hidden;">
+              <div id="forensic-progress-bar" style="width: 0%; height: 100%; background: var(--success-color); transition: width 0.2s;"></div>
+            </div>
           </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn-primary" style="background-color: transparent; border: 1px solid var(--border-light); color: var(--text-primary); width: auto;" onclick="hideModal('modal-submit-forensic')">Cancel</button>
-          <button type="submit" class="btn-primary" style="width: auto;">Submit Findings</button>
+          <button type="submit" class="btn-primary" style="width: auto; background-color: var(--success-color);" id="submit-forensic-submit-btn">Upload Report</button>
         </div>
       </form>
+    </div>
+  </div>
     </div>
   </div>
 

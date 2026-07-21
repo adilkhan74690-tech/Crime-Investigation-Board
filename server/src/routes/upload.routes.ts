@@ -7,44 +7,155 @@ import { formatResponse } from '../utils/apiResponse';
 import { asyncHandler } from '../utils/asyncHandler';
 import { ApiError } from '../utils/apiError';
 import { NotificationService } from '../services/notification.service';
+import { logAudit } from '../utils/auditLogger';
 
 const router = Router();
 
-// Endpoint: Upload single files (Images, Audio, Video, PDF) under folder namespace
-// Roles: FORENSIC_OFFICER, INSPECTOR, SUPER_ADMIN
-router.post('/upload', authenticateToken, authorizeRoles('SUPER_ADMIN', 'INSPECTOR', 'FORENSIC_OFFICER'), upload.single('file'), asyncHandler(async (req: any, res: any) => {
+// Handler function for Evidence File Upload
+const handleEvidenceUpload = asyncHandler(async (req: any, res: any) => {
   if (!req.file) {
-    throw new ApiError(400, 'No file payload found in request parameters.');
+    throw new ApiError(400, 'No file attached to upload request.');
   }
 
-  const { caseId, category, folder } = req.body; // folder can be 'evidence', 'reports', 'avatars', 'documents'
-  if (!caseId || !category || !folder) {
-    throw new ApiError(400, 'Missing metadata params: caseId, category, folder.');
+  const { caseId, category, title, remarks } = req.body;
+  if (!caseId) {
+    throw new ApiError(400, 'Missing target caseId or firId parameter.');
   }
 
-  // Upload to Cloudinary stream
-  const uploadResult = await CloudinaryService.uploadFile(req.file.buffer, req.file.originalname, folder);
+  const userRole = req.user.role;
+  const officerId = req.user.officerId;
 
-  // Save metadata reference in PostgreSQL database
-  const evidenceId = `EVID-2026-${Math.floor(Math.random() * 9000 + 1000)}`;
+  // Security Check: If SUB_INSPECTOR, verify officer is assigned to target FIR/Case
+  if (userRole === 'SUB_INSPECTOR') {
+    const fir = await prisma.fir.findFirst({
+      where: {
+        OR: [
+          { id: caseId },
+          { case: { id: caseId } }
+        ]
+      }
+    });
+    if (fir && fir.officerId && fir.officerId !== officerId) {
+      throw new ApiError(403, 'Security Clearance Denied: You can only upload evidence for your assigned FIR/Case.');
+    }
+  }
+
+  // Upload to Cloudinary cib/evidence folder
+  const uploadResult = await CloudinaryService.uploadFile(req.file.buffer, req.file.originalname, 'evidence');
+
+  const evidenceId = `EVID-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
+  const validCategory = (category || 'Other') as any;
+
+  // Save Evidence metadata record in PostgreSQL
   const evidenceRecord = await prisma.evidence.create({
     data: {
       id: evidenceId,
       caseId,
-      name: req.file.originalname,
-      category,
-      collectionDate: new Date().toISOString().split('T')[0],
+      name: title || req.file.originalname,
+      category: validCategory,
+      collectionDate: new Date(),
       collectedBy: req.user.name,
-      verificationStatus: 'Pending',
-      previewType: req.file.mimetype.split('/')[0], // image, video, audio
-      previewData: uploadResult.secure_url
+      uploadedByOfficerId: officerId,
+      fileSize: req.file.size,
+      mimeType: req.file.mimetype,
+      remarks: remarks || null,
+      chainOfCustodyStatus: 'Secured in Vault',
+      verificationStatus: 'Verified',
+      previewType: req.file.mimetype.split('/')[0] || 'file',
+      previewData: uploadResult.secure_url,
+      cloudinaryPublicId: uploadResult.public_id,
+      cloudinaryUrl: uploadResult.secure_url,
+      cloudinaryFormat: uploadResult.format,
+      cloudinaryResourceType: uploadResult.resource_type,
+      transfers: {
+        create: [
+          {
+            action: 'Evidence Ingested & Uploaded',
+            handler: req.user.name,
+            date: new Date()
+          }
+        ]
+      }
+    },
+    include: {
+      transfers: true
     }
   });
 
-  // Notify all officers of the newly ingested evidence
-  await NotificationService.notifyAll(`Evidence Ingested: New file "${req.file.originalname}" uploaded for case ${caseId}.`, 'Info').catch(console.error);
+  // Log Timeline step
+  await prisma.timeline.create({
+    data: {
+      caseId,
+      step: 'Evidence Uploaded',
+      completed: true,
+      details: `File "${req.file.originalname}" (${(req.file.size / 1024).toFixed(1)} KB) uploaded by ${req.user.name}`
+    }
+  }).catch(() => {});
 
-  res.json(formatResponse(evidenceRecord, 'File successfully uploaded and indexed.'));
+  // Update FIR / Case status automatically
+  await prisma.fir.updateMany({
+    where: { OR: [{ id: caseId }, { case: { id: caseId } }] },
+    data: { status: 'Evidence Uploaded' }
+  }).catch(() => {});
+
+  // Audit Log & Notification
+  await logAudit(req, officerId, userRole, 'Evidence Uploaded', `Uploaded file ${req.file.originalname} for case ${caseId}`, caseId).catch(console.error);
+  await NotificationService.notifyAll(`Evidence uploaded for ${caseId}: "${title || req.file.originalname}" by ${req.user.name}.`, 'Info').catch(console.error);
+
+  res.json(formatResponse(evidenceRecord, 'Evidence uploaded and indexed in PostgreSQL successfully.'));
+});
+
+// 1. Evidence File Upload Routes
+router.post('/upload', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SUB_INSPECTOR'), upload.single('file'), handleEvidenceUpload);
+router.post('/', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SUB_INSPECTOR'), upload.single('file'), handleEvidenceUpload);
+
+// 2. Delete Evidence File (Uploader or Super Admin)
+router.delete('/:id', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SUB_INSPECTOR'), asyncHandler(async (req: any, res: any) => {
+  const evidenceId = req.params.id;
+
+  const existing = await prisma.evidence.findUnique({
+    where: { id: evidenceId }
+  });
+
+  if (!existing) {
+    throw new ApiError(404, 'Evidence record not found.');
+  }
+
+  // Security Check: Only uploader or Super Admin can delete
+  if (req.user.role === 'SUB_INSPECTOR' && existing.uploadedByOfficerId && existing.uploadedByOfficerId !== req.user.officerId) {
+    throw new ApiError(403, 'Permission Denied: Only the uploader officer or Super Admin can delete this evidence file.');
+  }
+
+  // Delete from Cloudinary if public ID exists
+  if (existing.cloudinaryPublicId) {
+    await CloudinaryService.deleteFile(existing.cloudinaryPublicId).catch(console.error);
+  }
+
+  // Delete transfers and evidence record from PostgreSQL
+  await prisma.evidenceTransfer.deleteMany({ where: { evidenceId } });
+  await prisma.evidence.delete({ where: { id: evidenceId } });
+
+  await logAudit(req, req.user.officerId, req.user.role, 'Evidence Deleted', `Deleted evidence ${evidenceId}`, existing.caseId).catch(console.error);
+
+  res.json(formatResponse(null, `Evidence ${evidenceId} permanently deleted.`));
+}));
+
+// 3. List Evidence & Chain of Custody for a case
+router.get('/case/:caseId', authenticateToken, asyncHandler(async (req: any, res: any) => {
+  const { caseId } = req.params;
+  const list = await prisma.evidence.findMany({
+    where: {
+      OR: [
+        { caseId },
+        { case: { firId: caseId } }
+      ]
+    },
+    include: {
+      transfers: true
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+  res.json(formatResponse(list));
 }));
 
 export default router;

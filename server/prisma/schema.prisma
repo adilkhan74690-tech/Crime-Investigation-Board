@@ -186,6 +186,11 @@ model Evidence {
   category               EvidenceType
   collectionDate         DateTime           @default(now())
   collectedBy            String
+  uploadedByOfficerId    String?
+  fileSize               Int?
+  mimeType               String?
+  remarks                String?
+  chainOfCustodyStatus   String             @default("Secured in Vault")
   verificationStatus     String
   previewType            String
   previewData            String
@@ -210,16 +215,21 @@ model EvidenceTransfer {
 }
 
 model ForensicReport {
-  id           String   @id @default(uuid())
-  caseId       String
-  case         Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  type         String
-  analyst      String
-  status       String
-  summary      String
-  approvalDate String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                 String   @id @default(uuid())
+  caseId             String
+  case               Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  type               String
+  analyst            String
+  forensicOfficerId  String?
+  reportTitle        String?
+  status             String   @default("Pending Analysis")
+  summary            String
+  observations       String?
+  reportFileUrl      String?
+  cloudinaryPublicId String?
+  approvalDate       String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
 
 model Timeline {

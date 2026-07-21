@@ -2518,47 +2518,87 @@ async function handleAssignInspectorSubmit(event) {
 
 function showEvidenceUploadModal(caseId) {
   document.getElementById('evidence-case-id').value = caseId;
+  const titleInput = document.getElementById('evidence-title-input');
+  if (titleInput) titleInput.value = '';
+  const remarksInput = document.getElementById('evidence-remarks-input');
+  if (remarksInput) remarksInput.value = '';
   document.getElementById('evidence-file-input').value = '';
+  const progressContainer = document.getElementById('evidence-progress-container');
+  if (progressContainer) progressContainer.style.display = 'none';
   showModal('modal-evidence-upload');
 }
 
-async function handleEvidenceUploadSubmit(event) {
+function handleEvidenceUploadSubmit(event) {
   event.preventDefault();
   const caseId = document.getElementById('evidence-case-id').value;
   const fileInput = document.getElementById('evidence-file-input');
+  const titleInput = document.getElementById('evidence-title-input');
   const category = document.getElementById('evidence-category-select').value;
+  const remarksInput = document.getElementById('evidence-remarks-input');
 
-  if (fileInput.files.length === 0) return;
+  if (fileInput.files.length === 0) {
+    triggerToast("Please select a file to upload.", "danger");
+    return;
+  }
+
+  const file = fileInput.files[0];
+  if (file.size > 25 * 1024 * 1024) {
+    triggerToast("File size exceeds maximum limit of 25MB.", "danger");
+    return;
+  }
 
   const token = sessionStorage.getItem('cib_jwt_token');
   const formData = new FormData();
-  formData.append('file', fileInput.files[0]);
+  formData.append('file', file);
   formData.append('caseId', caseId);
   formData.append('category', category);
-  formData.append('folder', 'evidence');
+  formData.append('title', titleInput ? titleInput.value : file.name);
+  formData.append('remarks', remarksInput ? remarksInput.value : '');
 
-  try {
-    const response = await fetch('/api/files/upload', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`
-      },
-      body: formData
-    });
-    
-    const result = await response.json();
-    if (response.ok && result.success) {
-      triggerToast("Evidence uploaded and indexed successfully.", "success");
-      hideModal('modal-evidence-upload');
-      await initDashboard();
-      openCaseDetail(caseId);
-    } else {
-      triggerToast(result.error || "Upload failed.", "danger");
+  const submitBtn = document.getElementById('evidence-upload-submit-btn');
+  const progressContainer = document.getElementById('evidence-progress-container');
+  const progressBar = document.getElementById('evidence-progress-bar');
+  const progressText = document.getElementById('evidence-progress-text');
+
+  if (submitBtn) submitBtn.disabled = true;
+  if (progressContainer) progressContainer.style.display = 'flex';
+
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/api/evidence/upload', true);
+  xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+
+  xhr.upload.onprogress = function(e) {
+    if (e.lengthComputable) {
+      const percent = Math.round((e.loaded / e.total) * 100);
+      if (progressBar) progressBar.style.width = `${percent}%`;
+      if (progressText) progressText.textContent = `${percent}%`;
     }
-  } catch (err) {
-    console.error(err);
-    triggerToast("Server connection error.", "danger");
-  }
+  };
+
+  xhr.onload = async function() {
+    if (submitBtn) submitBtn.disabled = false;
+    try {
+      const result = JSON.parse(xhr.responseText);
+      if (xhr.status >= 200 && xhr.status < 300 && result.success) {
+        triggerToast("Evidence file successfully uploaded to Cloudinary and saved to PostgreSQL.", "success");
+        hideModal('modal-evidence-upload');
+        await fetchAndRenderFirs();
+        openCaseDetail(caseId);
+      } else {
+        triggerToast(result.error || result.message || "Evidence upload failed.", "danger");
+      }
+    } catch (err) {
+      console.error('Upload parse error:', err);
+      triggerToast("Upload failed due to server error.", "danger");
+    }
+  };
+
+  xhr.onerror = function() {
+    if (submitBtn) submitBtn.disabled = false;
+    triggerToast("Network error during file upload.", "danger");
+  };
+
+  xhr.send(formData);
 }
 
 function showRequestForensicModal(caseId) {
@@ -2602,41 +2642,102 @@ async function handleRequestForensicSubmit(event) {
   }
 }
 
-function showSubmitForensicModal(reportId) {
+function showSubmitForensicModal(reportId, caseId = '') {
   document.getElementById('submit-report-id').value = reportId;
+  const caseIdInput = document.getElementById('submit-report-case-id');
+  if (caseIdInput) caseIdInput.value = caseId;
+  const titleInput = document.getElementById('submit-forensic-title');
+  if (titleInput) titleInput.value = '';
   document.getElementById('submit-forensic-summary').value = '';
+  const fileInput = document.getElementById('submit-forensic-file');
+  if (fileInput) fileInput.value = '';
+  const progressContainer = document.getElementById('forensic-progress-container');
+  if (progressContainer) progressContainer.style.display = 'none';
   showModal('modal-submit-forensic');
 }
 
-async function handleSubmitForensicSubmit(event) {
+function handleSubmitForensicSubmit(event) {
   event.preventDefault();
-  const reportId = document.getElementById('submit-report-id').value;
-  const summary = document.getElementById('submit-forensic-summary').value;
+  const caseId = document.getElementById('submit-report-case-id')?.value || document.getElementById('submit-report-id').value;
+  const titleInput = document.getElementById('submit-forensic-title');
+  const fileInput = document.getElementById('submit-forensic-file');
+  const summaryInput = document.getElementById('submit-forensic-summary');
 
+  const token = sessionStorage.getItem('cib_jwt_token');
+  const formData = new FormData();
+  formData.append('caseId', caseId);
+  formData.append('reportTitle', titleInput ? titleInput.value : 'Forensic Report');
+  formData.append('summary', summaryInput ? summaryInput.value : '');
+  formData.append('observations', summaryInput ? summaryInput.value : '');
+  if (fileInput && fileInput.files.length > 0) {
+    formData.append('file', fileInput.files[0]);
+  }
+
+  const submitBtn = document.getElementById('submit-forensic-submit-btn');
+  const progressContainer = document.getElementById('forensic-progress-container');
+  const progressBar = document.getElementById('forensic-progress-bar');
+  const progressText = document.getElementById('forensic-progress-text');
+
+  if (submitBtn) submitBtn.disabled = true;
+  if (progressContainer) progressContainer.style.display = 'flex';
+
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', '/api/forensics/upload', true);
+  xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+
+  xhr.upload.onprogress = function(e) {
+    if (e.lengthComputable) {
+      const percent = Math.round((e.loaded / e.total) * 100);
+      if (progressBar) progressBar.style.width = `${percent}%`;
+      if (progressText) progressText.textContent = `${percent}%`;
+    }
+  };
+
+  xhr.onload = async function() {
+    if (submitBtn) submitBtn.disabled = false;
+    try {
+      const result = JSON.parse(xhr.responseText);
+      if (xhr.status >= 200 && xhr.status < 300 && result.success) {
+        triggerToast("Forensic report file and findings successfully submitted.", "success");
+        hideModal('modal-submit-forensic');
+        await fetchAndRenderFirs();
+        if (typeof renderForensicsLab === 'function') renderForensicsLab();
+      } else {
+        triggerToast(result.error || result.message || "Forensic upload failed.", "danger");
+      }
+    } catch (err) {
+      console.error('Forensic upload error:', err);
+      triggerToast("Forensic submission error.", "danger");
+    }
+  };
+
+  xhr.onerror = function() {
+    if (submitBtn) submitBtn.disabled = false;
+    triggerToast("Network error during forensic report upload.", "danger");
+  };
+
+  xhr.send(formData);
+}
+
+async function deleteEvidenceRecord(evidenceId, caseId = '') {
+  if (!confirm(`Are you sure you want to permanently delete evidence file ${evidenceId}?`)) return;
   const token = sessionStorage.getItem('cib_jwt_token');
 
   try {
-    const response = await fetch('/api/workflow/submit-forensic', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ reportId, summary })
+    const res = await fetch(`/api/evidence/${evidenceId}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
     });
-    
-    const result = await response.json();
-    if (response.ok && result.success) {
-      triggerToast("Forensic analysis findings logged successfully.", "success");
-      hideModal('modal-submit-forensic');
-      await initDashboard();
-      if (typeof renderForensicsLab === 'function') renderForensicsLab();
+    const result = await res.json();
+    if (res.ok && result.success) {
+      triggerToast(result.message || "Evidence file deleted.", "success");
+      if (caseId) openCaseDetail(caseId);
     } else {
-      triggerToast(result.error || "Failed to submit findings.", "danger");
+      triggerToast(result.error || "Failed to delete evidence file.", "danger");
     }
   } catch (err) {
-    console.error(err);
-    triggerToast("Server connection error.", "danger");
+    console.error('Delete evidence error:', err);
+    triggerToast("Server error deleting evidence file.", "danger");
   }
 }
 
@@ -2751,6 +2852,7 @@ window.showRequestForensicModal = showRequestForensicModal;
 window.handleRequestForensicSubmit = handleRequestForensicSubmit;
 window.showSubmitForensicModal = showSubmitForensicModal;
 window.handleSubmitForensicSubmit = handleSubmitForensicSubmit;
+window.deleteEvidenceRecord = deleteEvidenceRecord;
 window.showReviewCaseModal = showReviewCaseModal;
 window.handleReviewCaseSubmit = handleReviewCaseSubmit;
 window.approveChargesheet = approveChargesheet;
