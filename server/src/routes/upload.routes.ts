@@ -48,7 +48,19 @@ const handleEvidenceUpload = asyncHandler(async (req: any, res: any) => {
     }
   }
 
-  // Security Check: If SUB_INSPECTOR or INSPECTOR, verify clearance
+  // Security Check for Evidence Upload Role-Based Access:
+  // - SUPER_ADMIN: Cannot upload evidence (Registry view only)
+  // - FORENSIC_OFFICER: Cannot upload evidence (Only forensic reports allowed)
+  // - SUB_INSPECTOR: Must be assigned to the FIR / Case. Evidence must belong to an assigned case.
+  // - INSPECTOR: Must be assigned to the Case. No direct evidence upload unless explicitly assigned.
+  if (userRole === 'SUPER_ADMIN') {
+    throw new ApiError(403, 'Permission Denied: Super Admin cannot upload evidence directly. Super Admin has view-only access to Evidence Registry.');
+  }
+
+  if (userRole === 'FORENSIC_OFFICER') {
+    throw new ApiError(403, 'Permission Denied: Forensic Officers cannot upload evidence. You can only upload forensic reports.');
+  }
+
   if (userRole === 'SUB_INSPECTOR') {
     const fir = await prisma.fir.findFirst({
       where: {
@@ -58,11 +70,28 @@ const handleEvidenceUpload = asyncHandler(async (req: any, res: any) => {
         ]
       }
     });
-    if (fir && fir.officerId && fir.officerId !== officerId) {
-      // Allow if officer matches case officerId as well
-      if (targetCase && targetCase.officerId !== officerId) {
-        throw new ApiError(403, 'Security Clearance Denied: You can only upload evidence for your assigned FIR/Case.');
+    const isAssignedFir = fir && fir.officerId && fir.officerId === officerId;
+    const isAssignedCase = targetCase && targetCase.officerId === officerId;
+
+    if (!isAssignedFir && !isAssignedCase) {
+      throw new ApiError(403, 'Security Clearance Denied: Sub-Inspectors can only upload evidence for cases/FIRs explicitly assigned to them.');
+    }
+  }
+
+  if (userRole === 'INSPECTOR') {
+    const isAssignedCase = targetCase && targetCase.officerId === officerId;
+    const fir = await prisma.fir.findFirst({
+      where: {
+        OR: [
+          { id: caseId },
+          { case: { id: caseId } }
+        ]
       }
+    });
+    const isAssignedFir = fir && fir.officerId && fir.officerId === officerId;
+
+    if (!isAssignedCase && !isAssignedFir) {
+      throw new ApiError(403, 'Security Clearance Denied: Inspectors can only upload evidence for cases explicitly assigned to them.');
     }
   }
 
@@ -149,9 +178,9 @@ const handleEvidenceUpload = asyncHandler(async (req: any, res: any) => {
   res.json(formatResponse(evidenceRecord, 'Evidence uploaded and indexed in PostgreSQL successfully.'));
 });
 
-// 1. Evidence File Upload Routes
-router.post('/upload', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SUB_INSPECTOR', 'INSPECTOR'), upload.single('file'), handleEvidenceUpload);
-router.post('/', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SUB_INSPECTOR', 'INSPECTOR'), upload.single('file'), handleEvidenceUpload);
+// 1. Evidence File Upload Routes (Only SUB_INSPECTOR and assigned INSPECTOR allowed)
+router.post('/upload', authenticateToken, authorizeRoles('SUB_INSPECTOR', 'INSPECTOR'), upload.single('file'), handleEvidenceUpload);
+router.post('/', authenticateToken, authorizeRoles('SUB_INSPECTOR', 'INSPECTOR'), upload.single('file'), handleEvidenceUpload);
 
 // 2. Delete Evidence File (Uploader or Super Admin)
 router.delete('/:id', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SUB_INSPECTOR'), asyncHandler(async (req: any, res: any) => {

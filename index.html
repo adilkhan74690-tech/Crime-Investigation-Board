@@ -497,19 +497,35 @@
       <main id="view-io-evidence" class="page-container">
         <div class="page-header">
           <div>
-            <h2 class="page-title">Evidence Vault</h2>
-            <p style="color: var(--text-secondary); font-size: 14px;">Secure digital tracking of forensic evidence artifacts & file chain-of-custody logs</p>
+            <h2 class="page-title" id="evidence-view-title">Evidence Vault</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;" id="evidence-view-subtitle">Secure digital tracking of forensic evidence artifacts & file chain-of-custody logs</p>
           </div>
         </div>
 
-        <!-- Drag and Drop Upload -->
-        <div class="upload-zone" style="margin-bottom: 24px;" onclick="triggerToast('Secure upload pipeline initiated. Standard virus scanning starting...', 'success')">
-          <i class="ri-upload-cloud-2-line" style="font-size: 32px; color: var(--primary-color); display:block; margin-bottom: 8px;"></i>
-          <strong>Drag and drop crime scene files here</strong>
-          <span style="display:block; font-size: 12px; color: var(--text-secondary); margin-top: 4px;">Supports secure images, ballistic scans, audio waveforms, or DNA files (AES-GCM-256 encrypted on ingest)</span>
+        <!-- Super Admin / Standard Evidence Registry Table Container -->
+        <div id="evidence-registry-container" class="data-table-container">
+          <table class="enterprise-table">
+            <thead>
+              <tr>
+                <th>Case ID</th>
+                <th>Evidence ID</th>
+                <th>Uploaded By</th>
+                <th>Uploaded Date</th>
+                <th>Evidence Type</th>
+                <th>Chain of Custody</th>
+                <th>Status</th>
+                <th>Download</th>
+                <th>View Details</th>
+              </tr>
+            </thead>
+            <tbody id="evidence-registry-tbody">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
         </div>
 
-        <div class="evidence-page-layout">
+        <!-- Sub Inspector / Forensic / Assigned Evidence Grid Layout (Hidden for Super Admin) -->
+        <div class="evidence-page-layout" id="evidence-interactive-layout" style="display: none;">
           <!-- Evidence Grid -->
           <div class="evidence-grid" id="evidence-grid-container">
             <!-- Loaded dynamically -->
@@ -519,7 +535,7 @@
           <div class="evidence-preview-box" style="background-color: var(--surface-color); border:1px solid var(--border-color); padding: 24px; border-radius: var(--radius-lg);">
             <h3 style="font-size: 15px; font-weight:600; margin-bottom: 16px; border-bottom:1px solid var(--border-color); padding-bottom:12px;">Item Forensic Diagnostic</h3>
             <div id="evidence-preview-graphic" class="evidence-graphic" style="height: 180px; overflow:hidden; border-radius:var(--radius-md);">
-              Select an evidence file from the grid to run matching logic and trace custody.
+              Select an evidence file to run matching logic and trace custody.
             </div>
             
             <div style="margin-top: 24px;">

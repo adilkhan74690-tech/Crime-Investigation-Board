@@ -1168,11 +1168,84 @@ function closeCaseDetail() {
 
 // Interactive Evidence Grid
 function renderEvidenceGrid() {
+  const activeRole = sessionStorage.getItem('cib_officer_role') || 'SUPER_ADMIN';
+  const currentOfficerId = sessionStorage.getItem('cib_officer_id');
+  const registryContainer = document.getElementById('evidence-registry-container');
+  const interactiveLayout = document.getElementById('evidence-interactive-layout');
+  const tbody = document.getElementById('evidence-registry-tbody');
+
+  const titleEl = document.getElementById('evidence-view-title');
+  const subtitleEl = document.getElementById('evidence-view-subtitle');
+
+  if (activeRole === 'SUPER_ADMIN') {
+    if (titleEl) titleEl.textContent = 'Evidence Registry';
+    if (subtitleEl) subtitleEl.textContent = 'Central evidence registry table - System audit & chain-of-custody archive';
+    if (registryContainer) registryContainer.style.display = 'block';
+    if (interactiveLayout) interactiveLayout.style.display = 'none';
+
+    if (tbody) {
+      tbody.innerHTML = '';
+      if (!window.CIB_DB.evidence || window.CIB_DB.evidence.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-secondary); padding: 24px;">No evidence records indexed in PostgreSQL registry.</td></tr>`;
+        return;
+      }
+
+      window.CIB_DB.evidence.forEach(ev => {
+        const row = document.createElement('tr');
+        const formattedDate = ev.createdAt ? new Date(ev.createdAt).toLocaleDateString() : (ev.collectionDate ? new Date(ev.collectionDate).toLocaleDateString() : 'N/A');
+        const uploader = ev.collectedBy || ev.uploadedByOfficerId || 'Unknown Officer';
+        const downloadUrl = ev.cloudinaryUrl || ev.previewData || '#';
+
+        row.innerHTML = `
+          <td data-label="Case ID"><strong style="color: var(--primary-color); font-family: monospace;">${ev.caseId || 'N/A'}</strong></td>
+          <td data-label="Evidence ID"><span style="font-family: monospace; font-weight: 600; color: #FFF;">${ev.id}</span></td>
+          <td data-label="Uploaded By"><span style="font-weight: 500; color: #FFF;">${uploader}</span></td>
+          <td data-label="Uploaded Date"><span style="color: var(--text-secondary); font-size: 12px;">${formattedDate}</span></td>
+          <td data-label="Evidence Type"><span class="badge badge-warning" style="font-size: 11px; padding: 2px 8px;">${ev.category || ev.previewType || 'Artifact'}</span></td>
+          <td data-label="Chain of Custody"><span style="font-size: 12px; color: var(--text-secondary);">${ev.chainOfCustodyStatus || 'Secured in Vault'}</span></td>
+          <td data-label="Status"><span class="badge ${ev.verificationStatus === 'Verified' || ev.verificationStatus === 'Verified Integrity' ? 'badge-status-solved' : 'priority-medium'}" style="font-size: 11px; padding: 2px 8px;">${ev.verificationStatus || 'Verified'}</span></td>
+          <td data-label="Download">${downloadUrl !== '#' ? `<a href="${downloadUrl}" target="_blank" download class="btn-primary" style="padding: 4px 10px; font-size: 11px; width: auto; background-color: var(--primary-color); display: inline-flex; align-items: center; gap: 4px;"><i class="ri-download-line"></i> Download</a>` : '<span style="color:var(--text-secondary); font-size:11px;">N/A</span>'}</td>
+          <td data-label="View Details"><button class="btn-primary" style="padding: 4px 10px; font-size: 11px; width: auto; background-color: var(--border-light);" onclick="previewEvidence('${ev.id}'); document.getElementById('evidence-interactive-layout').style.display='grid'; document.getElementById('evidence-interactive-layout').scrollIntoView({behavior:'smooth'});"><i class="ri-eye-line"></i> Details</button></td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+    return;
+  }
+
+  // Non-Super Admin roles (SUB_INSPECTOR, INSPECTOR, FORENSIC_OFFICER, etc.)
+  if (titleEl) titleEl.textContent = 'Evidence Vault';
+  if (subtitleEl) subtitleEl.textContent = 'Secure digital tracking of forensic evidence artifacts & file chain-of-custody logs';
+  if (registryContainer) registryContainer.style.display = 'none';
+  if (interactiveLayout) interactiveLayout.style.display = 'grid';
+
   const container = document.getElementById('evidence-grid-container');
   if (!container) return;
   container.innerHTML = '';
-  
-  window.CIB_DB.evidence.forEach(ev => {
+
+  // Filter evidence based on role clearance:
+  // FORENSIC_OFFICER: Can view evidence received for forensic analysis or assigned cases
+  // INSPECTOR: Can view evidence for assigned cases
+  // SUB_INSPECTOR: Can view evidence for assigned cases/FIRs
+  let filteredEvidences = window.CIB_DB.evidence;
+
+  if (activeRole === 'INSPECTOR' || activeRole === 'SUB_INSPECTOR') {
+    const myCaseIds = window.CIB_DB.cases.filter(c => c.officerId === currentOfficerId || c.assignedOfficerId === currentOfficerId).map(c => c.id);
+    const myFirIds = window.CIB_DB.firs.filter(f => f.officerId === currentOfficerId).map(f => f.id);
+    const allowedIds = new Set([...myCaseIds, ...myFirIds]);
+    filteredEvidences = window.CIB_DB.evidence.filter(ev => allowedIds.has(ev.caseId));
+  } else if (activeRole === 'FORENSIC_OFFICER') {
+    // FORENSIC_OFFICER sees evidence assigned or submitted for forensic analysis
+    const forensicCaseIds = window.CIB_DB.forensics.map(f => f.caseId);
+    filteredEvidences = window.CIB_DB.evidence.filter(ev => forensicCaseIds.includes(ev.caseId) || ev.uploadedByOfficerId === currentOfficerId);
+  }
+
+  if (filteredEvidences.length === 0) {
+    container.innerHTML = `<div style="grid-column: 1/-1; padding: 24px; text-align: center; color: var(--text-secondary); background: var(--surface-color); border-radius: var(--radius-md); border: 1px dashed var(--border-color);">No evidence artifacts available under your security clearance.</div>`;
+    return;
+  }
+
+  filteredEvidences.forEach(ev => {
     const card = document.createElement('div');
     card.className = 'evidence-card';
     card.onclick = () => previewEvidence(ev.id);
@@ -1190,7 +1263,7 @@ function renderEvidenceGrid() {
         <div class="evidence-card-title">${ev.name}</div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
           <span style="font-size:11px; color:var(--text-secondary);">${ev.id}</span>
-          <span class="badge ${ev.verificationStatus === 'Verified' ? 'badge-status-solved' : 'priority-medium'}" style="font-size:9px; padding:2px 6px;">${ev.verificationStatus}</span>
+          <span class="badge ${ev.verificationStatus === 'Verified' || ev.verificationStatus === 'Verified Integrity' ? 'badge-status-solved' : 'priority-medium'}" style="font-size:9px; padding:2px 6px;">${ev.verificationStatus || 'Verified'}</span>
         </div>
       </div>
     `;
