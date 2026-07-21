@@ -2625,9 +2625,60 @@ function showEvidenceUploadModal(caseId) {
   const remarksInput = document.getElementById('evidence-remarks-input');
   if (remarksInput) remarksInput.value = '';
   document.getElementById('evidence-file-input').value = '';
+  const fileInfo = document.getElementById('drag-drop-file-info');
+  if (fileInfo) fileInfo.style.display = 'none';
   const progressContainer = document.getElementById('evidence-progress-container');
   if (progressContainer) progressContainer.style.display = 'none';
   showModal('modal-evidence-upload');
+  initDragAndDropUpload();
+}
+
+function handleEvidenceFileSelect(event) {
+  const file = event.target.files ? event.target.files[0] : null;
+  const infoEl = document.getElementById('drag-drop-file-info');
+  if (file && infoEl) {
+    const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+    infoEl.style.display = 'block';
+    infoEl.innerHTML = `<i class="ri-checkbox-circle-line"></i> Selected File: <strong>${file.name}</strong> (${sizeMb} MB)`;
+  }
+}
+
+function initDragAndDropUpload() {
+  const dropZone = document.getElementById('evidence-drop-zone');
+  if (!dropZone) return;
+
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, e => {
+      e.preventDefault();
+      e.stopPropagation();
+    }, false);
+  });
+
+  ['dragenter', 'dragover'].forEach(eventName => {
+    dropZone.addEventListener(eventName, () => {
+      dropZone.style.backgroundColor = 'rgba(37,99,235,0.15)';
+      dropZone.style.borderColor = 'var(--success-color)';
+    }, false);
+  });
+
+  ['dragleave', 'drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, () => {
+      dropZone.style.backgroundColor = 'rgba(37,99,235,0.05)';
+      dropZone.style.borderColor = 'var(--primary-color)';
+    }, false);
+  });
+
+  dropZone.addEventListener('drop', e => {
+    const dt = e.dataTransfer;
+    const files = dt.files;
+    if (files && files.length > 0) {
+      const fileInput = document.getElementById('evidence-file-input');
+      if (fileInput) {
+        fileInput.files = files;
+        handleEvidenceFileSelect({ target: fileInput });
+      }
+    }
+  }, false);
 }
 
 function handleEvidenceUploadSubmit(event) {
@@ -2684,7 +2735,7 @@ function handleEvidenceUploadSubmit(event) {
       if (xhr.status >= 200 && xhr.status < 300 && result.success) {
         triggerToast("Evidence file successfully uploaded to Cloudinary and saved to PostgreSQL.", "success");
         hideModal('modal-evidence-upload');
-        await fetchAndRenderFirs();
+        await initDashboard();
         openCaseDetail(caseId);
       } else {
         triggerToast(result.error || result.message || "Evidence upload failed.", "danger");
@@ -2950,6 +3001,7 @@ window.showAssignInspectorModal = showAssignInspectorModal;
 window.handleAssignInspectorSubmit = handleAssignInspectorSubmit;
 window.showEvidenceUploadModal = showEvidenceUploadModal;
 window.handleEvidenceUploadSubmit = handleEvidenceUploadSubmit;
+window.handleEvidenceFileSelect = handleEvidenceFileSelect;
 window.showRequestForensicModal = showRequestForensicModal;
 window.handleRequestForensicSubmit = handleRequestForensicSubmit;
 window.showSubmitForensicModal = showSubmitForensicModal;
