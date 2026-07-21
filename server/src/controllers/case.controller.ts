@@ -9,9 +9,33 @@ import { logAudit } from '../utils/auditLogger';
 
 export class CaseController {
   public static listCases = asyncHandler(async (req: AuthRequest, res: Response) => {
-    let list = await CaseService.getCases();
+    let list;
     if (req.user?.role === 'INSPECTOR' || req.user?.role === 'SUB_INSPECTOR') {
-      list = list.filter((c: any) => c.officerId === req.user?.officerId);
+      const assignments = await prisma.caseAssignmentHistory.findMany({
+        where: { officerId: req.user.officerId },
+        select: { caseId: true }
+      });
+      const caseIds = assignments.map((a: any) => a.caseId);
+      list = await prisma.case.findMany({
+        where: { id: { in: caseIds } },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          assignedOfficer: {
+            include: {
+              user: true
+            }
+          },
+          fir: true,
+          witnesses: true,
+          timeline: true,
+          evidence: true,
+          forensics: true,
+          victims: true,
+          suspects: true
+        }
+      });
+    } else {
+      list = await CaseService.getCases();
     }
     const formatted = list.map((c: any) => {
       const hasForensic = c.forensics && c.forensics.length > 0;

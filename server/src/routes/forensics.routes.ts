@@ -29,12 +29,9 @@ router.post('/upload', authenticateToken, authorizeRoles('SUPER_ADMIN', 'FORENSI
   }
 
   let reportFileUrl = null;
-  let cloudinaryPublicId = null;
 
   if (req.file) {
-    const uploadResult = await CloudinaryService.uploadFile(req.file.buffer, req.file.originalname, 'reports');
-    reportFileUrl = uploadResult.secure_url;
-    cloudinaryPublicId = uploadResult.public_id;
+    reportFileUrl = `/uploads/${req.file.filename}`;
   }
 
   const reportId = `REP-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
@@ -53,16 +50,11 @@ router.post('/upload', authenticateToken, authorizeRoles('SUPER_ADMIN', 'FORENSI
         summary: summary || observations || 'Forensic evidence analysis completed.',
         observations: observations || summary || 'Report verified by forensic department.',
         reportFileUrl,
-        cloudinaryPublicId,
+        cloudinaryPublicId: null,
         approvalDate: 'Submitted for Review'
       }
     });
   } catch (dbErr: any) {
-    if (cloudinaryPublicId) {
-      await CloudinaryService.deleteFile(cloudinaryPublicId).catch((delErr) => {
-        console.error('Failed to delete file from Cloudinary after DB failure:', delErr);
-      });
-    }
     throw dbErr;
   }
 
@@ -93,7 +85,7 @@ router.post('/upload', authenticateToken, authorizeRoles('SUPER_ADMIN', 'FORENSI
 router.post('/', authenticateToken, authorizeRoles('SUPER_ADMIN', 'FORENSIC_OFFICER'), upload.single('file'), asyncHandler(async (req: any, res: any) => {
   const { caseId, reportTitle, type, summary, observations } = req.body;
   if (req.file) {
-    const uploadResult = await CloudinaryService.uploadFile(req.file.buffer, req.file.originalname, 'reports');
+    const reportFileUrl = `/uploads/${req.file.filename}`;
     const reportId = `REP-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
     let record;
     try {
@@ -108,14 +100,11 @@ router.post('/', authenticateToken, authorizeRoles('SUPER_ADMIN', 'FORENSIC_OFFI
           status: 'Forensic Report Submitted',
           summary: summary || 'Forensic analysis completed.',
           observations: observations || summary || null,
-          reportFileUrl: uploadResult.secure_url,
-          cloudinaryPublicId: uploadResult.public_id
+          reportFileUrl: reportFileUrl,
+          cloudinaryPublicId: null
         }
       });
     } catch (dbErr: any) {
-      if (uploadResult.public_id) {
-        await CloudinaryService.deleteFile(uploadResult.public_id).catch(console.error);
-      }
       throw dbErr;
     }
     return res.json(formatResponse(record, 'Forensic report uploaded successfully.'));

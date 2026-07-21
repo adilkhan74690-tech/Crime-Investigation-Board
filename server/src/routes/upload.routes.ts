@@ -43,17 +43,7 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
     const userRole = req.user.role;
     const officerId = req.user.officerId;
 
-    // 2. Verify Cloudinary credentials configuration
-    const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-    const apiKey = process.env.CLOUDINARY_API_KEY;
-    const apiSecret = process.env.CLOUDINARY_API_SECRET;
-    console.log('[DEBUG UPLOAD] STEP 2: Cloudinary credentials check:', {
-      cloudName: cloudName ? `${cloudName.substring(0, 3)}***` : 'MISSING',
-      apiKey: apiKey ? 'PRESENT' : 'MISSING',
-      apiSecret: apiSecret ? 'PRESENT' : 'MISSING'
-    });
-
-    // 1. Verify the Case exists in database (strictly by database primary key id)
+    // Verify the Case exists in database (strictly by database primary key id)
     const caseRecord = await prisma.case.findUnique({
       where: { id: caseId }
     });
@@ -65,13 +55,13 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
     console.log('[DEBUG UPLOAD] Target Case verified:', { id: caseRecord.id, officerId: caseRecord.officerId });
     const targetCaseId = caseRecord.id;
 
-    // 6. Verify uploadedBy officer exists
+    // Verify uploadedBy officer exists
     const officerUser = await prisma.user.findUnique({ where: { id: officerId } });
     if (!officerUser) {
-      console.error(`[DEBUG UPLOAD ERROR] STEP 6 FAILED: Officer user ID "${officerId}" not found in database.`);
+      console.error(`[DEBUG UPLOAD ERROR] Officer user ID "${officerId}" not found in database.`);
       throw new ApiError(404, `Officer user ID "${officerId}" not found in database.`);
     }
-    console.log('[DEBUG UPLOAD] STEP 6 SUCCESS: Officer verified:', { id: officerUser.id, role: officerUser.role, name: officerUser.name });
+    console.log('[DEBUG UPLOAD] Officer verified:', { id: officerUser.id, role: officerUser.role, name: officerUser.name });
 
     // Security Check for Evidence Upload Role-Based Access
     if (userRole === 'SUPER_ADMIN') {
@@ -116,115 +106,50 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
       }
     }
 
-    // Compute file SHA256 hash checksum for evidence authenticity tracking
-    const fileHash = crypto.createHash('sha256').update(req.file.buffer).digest('hex');
-
-    // 3 & 4. Upload to Cloudinary cib/evidence folder (with local disk fallback)
-    let uploadResult: { secure_url: string; public_id: string | null; resource_type: string; format: string } | null = null;
-    
-    const isCloudinaryConfigured = !!(
-      process.env.CLOUDINARY_CLOUD_NAME &&
-      process.env.CLOUDINARY_API_KEY &&
-      process.env.CLOUDINARY_API_SECRET &&
-      process.env.CLOUDINARY_CLOUD_NAME !== 'mock_cloud' &&
-      process.env.CLOUDINARY_API_KEY !== 'mock_key' &&
-      process.env.CLOUDINARY_API_SECRET !== 'mock_secret'
-    );
-
-    if (isCloudinaryConfigured) {
-      try {
-        console.log('[DEBUG UPLOAD] STEP 3: Initiating Cloudinary upload...');
-        const cloudRes = await CloudinaryService.uploadFile(req.file.buffer, req.file.originalname, 'evidence');
-        uploadResult = {
-          secure_url: cloudRes.secure_url,
-          public_id: cloudRes.public_id,
-          resource_type: cloudRes.resource_type,
-          format: cloudRes.format
-        };
-        console.log('[DEBUG UPLOAD] STEP 3 SUCCESS: Cloudinary upload result:', uploadResult);
-      } catch (cloudErr: any) {
-        console.warn('[DEBUG UPLOAD WARNING] Cloudinary upload failed, falling back to local file system:', cloudErr?.message || cloudErr);
-      }
-    }
-
-    if (!uploadResult) {
-      console.log('[DEBUG UPLOAD] Saving file locally...');
-      try {
-        const uploadsDir = path.join(__dirname, '../../../uploads');
-        if (!fs.existsSync(uploadsDir)) {
-          fs.mkdirSync(uploadsDir, { recursive: true });
-        }
-        const fileExt = req.file.originalname.split('.').pop() || '';
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-        const localFileName = `${uniqueSuffix}.${fileExt}`;
-        const localFilePath = path.join(uploadsDir, localFileName);
-        
-        fs.writeFileSync(localFilePath, req.file.buffer);
-        console.log('[DEBUG UPLOAD] File saved locally to:', localFilePath);
-        
-        uploadResult = {
-          secure_url: `/uploads/${localFileName}`,
-          public_id: null,
-          resource_type: req.file.mimetype.split('/')[0] || 'file',
-          format: fileExt
-        };
-      } catch (localErr: any) {
-        console.error('[DEBUG UPLOAD ERROR] Local file saving failed:', localErr);
-        throw new ApiError(500, `Evidence upload failed: local file saving error: ${localErr.message}`);
-      }
-    }
+    const localFileName = req.file.filename;
+    const localFileUrl = `/uploads/${localFileName}`;
 
     const evidenceId = `EVID-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
     const validCategory = (category || 'Other') as any;
 
-    // 7. Save Evidence metadata record in PostgreSQL (Prisma insert)
-    console.log('[DEBUG UPLOAD] STEP 7: Executing Prisma evidence.create...');
-    let evidenceRecord;
-    try {
-      evidenceRecord = await prisma.evidence.create({
-        data: {
-          id: evidenceId,
-          caseId: caseRecord.id,
-          name: title || req.file.originalname,
-          category: validCategory,
-          collectionDate: new Date(),
-          collectedBy: req.user.name,
-          uploadedByOfficerId: officerId,
-          fileSize: req.file.size,
-          mimeType: req.file.mimetype,
-          remarks: remarks ? `${remarks} | SHA256: ${fileHash.slice(0, 16)}...` : `SHA256: ${fileHash}`,
-          chainOfCustodyStatus: `Secured in Vault by ${req.user.name} (${userRole})`,
-          verificationStatus: 'Verified Integrity',
-          previewType: req.file.mimetype.split('/')[0] || 'file',
-          previewData: uploadResult.secure_url,
-          cloudinaryPublicId: uploadResult.public_id,
-          cloudinaryUrl: uploadResult.secure_url,
-          cloudinaryFormat: uploadResult.format,
-          cloudinaryResourceType: uploadResult.resource_type,
-          transfers: {
-            create: [
-              {
-                action: `Evidence Ingested & Uploaded (${req.file.originalname})`,
-                handler: `${req.user.name} (${userRole})`,
-                date: new Date()
-              }
-            ]
-          }
-        },
-        include: {
-          transfers: true
+    // Save Evidence metadata record in PostgreSQL (Prisma insert)
+    console.log('[DEBUG UPLOAD] Executing Prisma evidence.create...');
+    const evidenceRecord = await prisma.evidence.create({
+      data: {
+        id: evidenceId,
+        caseId: caseRecord.id,
+        name: title || req.file.originalname,
+        category: validCategory,
+        collectionDate: new Date(),
+        collectedBy: req.user.name,
+        uploadedByOfficerId: officerId,
+        fileSize: req.file.size,
+        mimeType: req.file.mimetype,
+        remarks: remarks || 'Uploaded locally',
+        chainOfCustodyStatus: `Secured in Vault by ${req.user.name} (${userRole})`,
+        verificationStatus: 'Verified Integrity',
+        previewType: req.file.mimetype.split('/')[0] || 'file',
+        previewData: localFileUrl,
+        cloudinaryPublicId: null,
+        cloudinaryUrl: localFileUrl,
+        cloudinaryFormat: null,
+        cloudinaryResourceType: null,
+        transfers: {
+          create: [
+            {
+              action: `Evidence Ingested & Uploaded (${req.file.originalname})`,
+              handler: `${req.user.name} (${userRole})`,
+              date: new Date()
+            }
+          ]
         }
-      });
-      console.log('[DEBUG UPLOAD] STEP 7 SUCCESS: Prisma evidence inserted successfully:', evidenceRecord.id);
-    } catch (dbErr: any) {
-      console.error('[DEBUG UPLOAD ERROR] Database insert failed, deleting Cloudinary file:', dbErr);
-      if (uploadResult.public_id) {
-        await CloudinaryService.deleteFile(uploadResult.public_id).catch((delErr) => {
-          console.error('[DEBUG UPLOAD ERROR] Failed to delete file from Cloudinary after DB failure:', delErr);
-        });
+      },
+      include: {
+        transfers: true
       }
-      throw dbErr;
-    }
+    });
+
+    console.log('[DEBUG UPLOAD] Prisma evidence inserted successfully:', evidenceRecord.id);
 
     // Log Timeline step if case exists
     if (caseRecord) {
@@ -248,33 +173,24 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
     await logAudit(req, officerId, userRole, 'Evidence Uploaded', `Uploaded file ${req.file.originalname} for case ${caseRecord.id}`, caseRecord.id).catch(console.error);
     await NotificationService.notifyAll(`Evidence uploaded for ${caseRecord.id}: "${title || req.file.originalname}" by ${req.user.name}.`, 'Info').catch(console.error);
 
-    // 8. Return final response
-    console.log('[DEBUG UPLOAD] STEP 8: Returning successful final response for:', evidenceRecord.id);
+    // Return final response
+    console.log('[DEBUG UPLOAD] Returning successful final response for:', evidenceRecord.id);
     return res.json(formatResponse(evidenceRecord, 'Evidence uploaded and indexed in PostgreSQL successfully.'));
 
   } catch (err: any) {
-    console.error('[DEBUG UPLOAD EXCEPTION DETECTED] Exact failing error:', {
-      message: err?.message,
-      name: err?.name,
-      statusCode: err?.statusCode,
-      stack: err?.stack
-    });
-    // Pass exact error to express handler or format JSON directly with full diagnostic details
+    console.error('[DEBUG UPLOAD EXCEPTION DETECTED] Exact failing error:', err);
     if (err instanceof ApiError) {
       return res.status(err.statusCode).json({
         success: false,
         statusCode: err.statusCode,
-        error: err.message,
-        stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+        error: err.message
       });
     }
 
     return res.status(500).json({
       success: false,
       statusCode: 500,
-      error: err?.message || 'Internal Server Error during evidence upload',
-      exception: err?.name || 'Error',
-      stack: err?.stack || String(err)
+      error: err?.message || 'Internal Server Error during evidence upload'
     });
   }
 };

@@ -115,7 +115,7 @@ router.post('/create-case', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SU
     throw new ApiError(404, `Target FIR ID "${firId}" not found.`);
   }
 
-  const targetOfficerId = req.user.role === 'SUB_INSPECTOR' ? req.user.officerId : (assignedOfficerId || req.user.officerId);
+  const targetOfficerId = assignedOfficerId || req.user.officerId;
   const prismaPriority = (priority === 'Critical' ? 'High' : priority) as any;
 
   const newCase = await prisma.case.create({
@@ -221,55 +221,35 @@ router.post('/assign-inspector', authenticateToken, authorizeRoles('SUPER_ADMIN'
 
 // 4. Request Forensic Analysis (Inspector & Sub Inspector)
 router.post('/request-forensic', authenticateToken, authorizeRoles('SUPER_ADMIN', 'INSPECTOR', 'SUB_INSPECTOR'), asyncHandler(async (req: any, res: any) => {
-  const { reportId, caseId, type, summary } = req.body;
+  const { caseId } = req.body;
 
   const targetCase = await prisma.case.findUnique({
     where: { id: caseId }
   });
 
   if (!targetCase) {
-    throw new ApiError(404, 'Target case not found for forensic analysis request.');
+    throw new ApiError(404, 'Target case not found.');
   }
 
-  const validCaseId = targetCase.id;
-
-  const report = await prisma.forensicReport.create({
-    data: {
-      id: reportId,
-      caseId: validCaseId,
-      type,
-      analyst: req.user.name,
-      status: 'Pending Analysis',
-      summary,
-      approvalDate: 'Awaiting Report Upload'
-    }
-  });
-
-  // Update FIR status to UNDER_FORENSIC_REVIEW
-  await prisma.fir.updateMany({
-    where: {
-      OR: [
-        { id: validCaseId },
-        { case: { id: validCaseId } }
-      ]
-    },
+  const updatedCase = await prisma.case.update({
+    where: { id: targetCase.id },
     data: { status: 'UNDER_FORENSIC_REVIEW' }
   });
 
-  await logWorkflowAction(req, req.user.officerId, req.user.role, 'Forensic Requested', `Forensic analysis requested for case ${validCaseId}.`, validCaseId);
-  
-  await prisma.timeline.create({
-    data: {
-      caseId: validCaseId,
-      step: 'Forensic Lab Analysis Requested',
-      completed: true,
-      details: `Type: ${type}. Ref ID: ${reportId}`
-    }
-  });
+  // Also update corresponding FIR status for compatibility
+  await prisma.fir.updateMany({
+    where: {
+      OR: [
+        { id: targetCase.id },
+        { case: { id: targetCase.id } }
+      ]
+    },
+    data: { status: 'UNDER_FORENSIC_REVIEW' }
+  }).catch(console.error);
 
-  await NotificationService.notifyRole('FORENSIC_OFFICER', `Forensic Request: New analysis requested for case ${validCaseId}.`, 'Assignment').catch(console.error);
+  await logWorkflowAction(req, req.user.officerId, req.user.role, 'Sent to Forensics', `Case status updated to UNDER_FORENSIC_REVIEW.`, targetCase.id);
 
-  res.json(formatResponse(report, 'Forensic report request generated.'));
+  res.json(formatResponse(updatedCase, 'Case status updated to UNDER_FORENSIC_REVIEW.'));
 }));
 
 // 5. Submit Forensic Findings (Forensic Officer)

@@ -8,10 +8,7 @@ const requiredEnvVars = [
   'SMTP_PORT',
   'SMTP_USER',
   'SMTP_PASS',
-  'EMAIL_FROM',
-  'CLOUDINARY_CLOUD_NAME',
-  'CLOUDINARY_API_KEY',
-  'CLOUDINARY_API_SECRET'
+  'EMAIL_FROM'
 ];
 
 const missingEnvVars: string[] = [];
