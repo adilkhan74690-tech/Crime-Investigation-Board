@@ -51,14 +51,9 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
       apiSecret: apiSecret ? 'PRESENT' : 'MISSING'
     });
 
-    // 1. Verify the Case exists in database (by primary key id or linked firId)
-    const caseRecord = await prisma.case.findFirst({
-      where: {
-        OR: [
-          { id: caseId },
-          { firId: caseId }
-        ]
-      }
+    // 1. Verify the Case exists in database (strictly by database primary key id)
+    const caseRecord = await prisma.case.findUnique({
+      where: { id: caseId }
     });
 
     if (!caseRecord) {
@@ -129,16 +124,8 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
       uploadResult = await CloudinaryService.uploadFile(req.file.buffer, req.file.originalname, 'evidence');
       console.log('[DEBUG UPLOAD] STEP 3 SUCCESS: Cloudinary upload result:', uploadResult);
     } catch (cloudErr: any) {
-      console.error('[DEBUG UPLOAD WARNING/ERROR] STEP 3/4 Cloudinary upload failed:', cloudErr?.stack || cloudErr);
-      const mime = req.file.mimetype || 'application/octet-stream';
-      const base64Data = req.file.buffer.toString('base64');
-      uploadResult = {
-        secure_url: `data:${mime};base64,${base64Data}`,
-        public_id: `local_${Date.now()}_${req.file.originalname}`,
-        resource_type: mime.split('/')[0] || 'raw',
-        format: req.file.originalname.split('.').pop() || 'raw'
-      };
-      console.log('[DEBUG UPLOAD] Fallback data URI generated successfully.');
+      console.error('[DEBUG UPLOAD ERROR] Cloudinary upload failed:', cloudErr?.stack || cloudErr);
+      throw new ApiError(500, `Cloudinary upload failed: ${cloudErr.message || cloudErr}`);
     }
 
     const evidenceId = `EVID-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
@@ -146,41 +133,52 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
 
     // 7. Save Evidence metadata record in PostgreSQL (Prisma insert)
     console.log('[DEBUG UPLOAD] STEP 7: Executing Prisma evidence.create...');
-    const evidenceRecord = await prisma.evidence.create({
-      data: {
-        id: evidenceId,
-        caseId: caseRecord.id,
-        name: title || req.file.originalname,
-        category: validCategory,
-        collectionDate: new Date(),
-        collectedBy: req.user.name,
-        uploadedByOfficerId: officerId,
-        fileSize: req.file.size,
-        mimeType: req.file.mimetype,
-        remarks: remarks ? `${remarks} | SHA256: ${fileHash.slice(0, 16)}...` : `SHA256: ${fileHash}`,
-        chainOfCustodyStatus: `Secured in Vault by ${req.user.name} (${userRole})`,
-        verificationStatus: 'Verified Integrity',
-        previewType: req.file.mimetype.split('/')[0] || 'file',
-        previewData: uploadResult.secure_url,
-        cloudinaryPublicId: uploadResult.public_id,
-        cloudinaryUrl: uploadResult.secure_url,
-        cloudinaryFormat: uploadResult.format,
-        cloudinaryResourceType: uploadResult.resource_type,
-        transfers: {
-          create: [
-            {
-              action: `Evidence Ingested & Uploaded (${req.file.originalname})`,
-              handler: `${req.user.name} (${userRole})`,
-              date: new Date()
-            }
-          ]
+    let evidenceRecord;
+    try {
+      evidenceRecord = await prisma.evidence.create({
+        data: {
+          id: evidenceId,
+          caseId: caseRecord.id,
+          name: title || req.file.originalname,
+          category: validCategory,
+          collectionDate: new Date(),
+          collectedBy: req.user.name,
+          uploadedByOfficerId: officerId,
+          fileSize: req.file.size,
+          mimeType: req.file.mimetype,
+          remarks: remarks ? `${remarks} | SHA256: ${fileHash.slice(0, 16)}...` : `SHA256: ${fileHash}`,
+          chainOfCustodyStatus: `Secured in Vault by ${req.user.name} (${userRole})`,
+          verificationStatus: 'Verified Integrity',
+          previewType: req.file.mimetype.split('/')[0] || 'file',
+          previewData: uploadResult.secure_url,
+          cloudinaryPublicId: uploadResult.public_id,
+          cloudinaryUrl: uploadResult.secure_url,
+          cloudinaryFormat: uploadResult.format,
+          cloudinaryResourceType: uploadResult.resource_type,
+          transfers: {
+            create: [
+              {
+                action: `Evidence Ingested & Uploaded (${req.file.originalname})`,
+                handler: `${req.user.name} (${userRole})`,
+                date: new Date()
+              }
+            ]
+          }
+        },
+        include: {
+          transfers: true
         }
-      },
-      include: {
-        transfers: true
+      });
+      console.log('[DEBUG UPLOAD] STEP 7 SUCCESS: Prisma evidence inserted successfully:', evidenceRecord.id);
+    } catch (dbErr: any) {
+      console.error('[DEBUG UPLOAD ERROR] Database insert failed, deleting Cloudinary file:', dbErr);
+      if (uploadResult.public_id) {
+        await CloudinaryService.deleteFile(uploadResult.public_id).catch((delErr) => {
+          console.error('[DEBUG UPLOAD ERROR] Failed to delete file from Cloudinary after DB failure:', delErr);
+        });
       }
-    });
-    console.log('[DEBUG UPLOAD] STEP 7 SUCCESS: Prisma evidence inserted successfully:', evidenceRecord.id);
+      throw dbErr;
+    }
 
     // Log Timeline step if case exists
     if (caseRecord) {

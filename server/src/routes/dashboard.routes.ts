@@ -14,10 +14,11 @@ router.get('/dashboard-payload', authenticateToken, asyncHandler(async (req: any
   // Filter cases by role
   let caseWhereClause: any = {};
   if (role === 'INSPECTOR' || role === 'SUB_INSPECTOR') {
-    caseWhereClause.OR = [
-      { officerId: officerId },
-      { createdBy: officerId }
-    ];
+    caseWhereClause.assignmentHistory = {
+      some: {
+        officerId: officerId
+      }
+    };
   }
 
   const cases = await prisma.case.findMany({

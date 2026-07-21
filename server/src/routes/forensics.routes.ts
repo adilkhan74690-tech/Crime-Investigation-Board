@@ -39,22 +39,32 @@ router.post('/upload', authenticateToken, authorizeRoles('SUPER_ADMIN', 'FORENSI
 
   const reportId = `REP-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
 
-  const forensicRecord = await prisma.forensicReport.create({
-    data: {
-      id: reportId,
-      caseId,
-      type: type || 'Forensic Lab Analysis',
-      analyst: req.user.name,
-      forensicOfficerId: req.user.officerId,
-      reportTitle: reportTitle || (req.file ? req.file.originalname : 'Forensic Analysis Report'),
-      status: 'Forensic Report Submitted',
-      summary: summary || observations || 'Forensic evidence analysis completed.',
-      observations: observations || summary || 'Report verified by forensic department.',
-      reportFileUrl,
-      cloudinaryPublicId,
-      approvalDate: 'Submitted for Review'
+  let forensicRecord;
+  try {
+    forensicRecord = await prisma.forensicReport.create({
+      data: {
+        id: reportId,
+        caseId,
+        type: type || 'Forensic Lab Analysis',
+        analyst: req.user.name,
+        forensicOfficerId: req.user.officerId,
+        reportTitle: reportTitle || (req.file ? req.file.originalname : 'Forensic Analysis Report'),
+        status: 'Forensic Report Submitted',
+        summary: summary || observations || 'Forensic evidence analysis completed.',
+        observations: observations || summary || 'Report verified by forensic department.',
+        reportFileUrl,
+        cloudinaryPublicId,
+        approvalDate: 'Submitted for Review'
+      }
+    });
+  } catch (dbErr: any) {
+    if (cloudinaryPublicId) {
+      await CloudinaryService.deleteFile(cloudinaryPublicId).catch((delErr) => {
+        console.error('Failed to delete file from Cloudinary after DB failure:', delErr);
+      });
     }
-  });
+    throw dbErr;
+  }
 
   // Log Timeline entry
   await prisma.timeline.create({
@@ -85,21 +95,29 @@ router.post('/', authenticateToken, authorizeRoles('SUPER_ADMIN', 'FORENSIC_OFFI
   if (req.file) {
     const uploadResult = await CloudinaryService.uploadFile(req.file.buffer, req.file.originalname, 'reports');
     const reportId = `REP-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
-    const record = await prisma.forensicReport.create({
-      data: {
-        id: reportId,
-        caseId: caseId || 'CASE-GENERAL',
-        type: type || 'Forensic Analysis',
-        analyst: req.user.name,
-        forensicOfficerId: req.user.officerId,
-        reportTitle: reportTitle || req.file.originalname,
-        status: 'Forensic Report Submitted',
-        summary: summary || 'Forensic analysis completed.',
-        observations: observations || summary || null,
-        reportFileUrl: uploadResult.secure_url,
-        cloudinaryPublicId: uploadResult.public_id
+    let record;
+    try {
+      record = await prisma.forensicReport.create({
+        data: {
+          id: reportId,
+          caseId: caseId || 'CASE-GENERAL',
+          type: type || 'Forensic Analysis',
+          analyst: req.user.name,
+          forensicOfficerId: req.user.officerId,
+          reportTitle: reportTitle || req.file.originalname,
+          status: 'Forensic Report Submitted',
+          summary: summary || 'Forensic analysis completed.',
+          observations: observations || summary || null,
+          reportFileUrl: uploadResult.secure_url,
+          cloudinaryPublicId: uploadResult.public_id
+        }
+      });
+    } catch (dbErr: any) {
+      if (uploadResult.public_id) {
+        await CloudinaryService.deleteFile(uploadResult.public_id).catch(console.error);
       }
-    });
+      throw dbErr;
+    }
     return res.json(formatResponse(record, 'Forensic report uploaded successfully.'));
   }
   const rep = await prisma.forensicReport.create({

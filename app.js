@@ -463,28 +463,9 @@ function initApexCharts() {
     '#chart-evidence-stats'
   ];
 
-  const hasCases = window.CIB_DB.cases && window.CIB_DB.cases.length > 0;
-  const casesToAnalyze = hasCases ? window.CIB_DB.cases : [
-    { id: 'CASE-2026-001', title: 'Syndicate Warehouse Raid', crimeType: 'Organized Crime', priority: 'High', location: 'Sector 4', status: 'Solved', createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString() },
-    { id: 'CASE-2026-002', title: 'Mainframe Ransomware Attack', crimeType: 'Cybercrime', priority: 'Critical', location: 'Downtown HQ', status: 'Active', createdAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString() },
-    { id: 'CASE-2026-003', title: 'Eastside Securities Embezzlement', crimeType: 'Financial Crime', priority: 'Medium', location: 'Financial District', status: 'Active', createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString() },
-    { id: 'CASE-2026-004', title: 'Port Authority Smuggling ring', crimeType: 'Organized Crime', priority: 'High', location: 'Harbor Gate 12', status: 'Solved', createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString() },
-    { id: 'CASE-2026-005', title: 'Redwood Residence Intrusion', crimeType: 'Homicide', priority: 'Critical', location: 'North Suburbs', status: 'Active', createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() }
-  ];
-
-  const hasOfficers = window.CIB_DB.officers && window.CIB_DB.officers.length > 0;
-  const officersToAnalyze = hasOfficers ? window.CIB_DB.officers : [
-    { name: 'Det. Sarah Jenkins', department: 'Major Crimes Division', solvedCases: 14, assignedCases: 4 },
-    { name: 'Agent Marcus Vance', department: 'Digital Forensics Unit', solvedCases: 9, assignedCases: 2 },
-    { name: 'Insp. Rahul Dev', department: 'Homicide Unit', solvedCases: 16, assignedCases: 5 },
-    { name: 'Agent Clara Zhao', department: 'Financial Crimes Division', solvedCases: 7, assignedCases: 1 },
-    { name: 'Det. James Miller', department: 'Organized Crime Unit', solvedCases: 11, assignedCases: 3 }
-  ];
-
-  const hasEvidence = window.CIB_DB.evidence && window.CIB_DB.evidence.length > 0;
-  const evidenceToAnalyze = hasEvidence ? window.CIB_DB.evidence : [
-    { category: 'DigitalHardware' }, { category: 'Weapon' }, { category: 'Weapon' }, { category: 'Document' }, { category: 'Narcotics' }
-  ];
+  const casesToAnalyze = window.CIB_DB.cases || [];
+  const officersToAnalyze = window.CIB_DB.officers || [];
+  const evidenceToAnalyze = window.CIB_DB.evidence || [];
 
   // Parse last 6 months dynamically
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -753,6 +734,9 @@ function switchView(viewName) {
   if (targetView === 'sa-audit-logs') {
     loadGlobalAuditLogs();
   }
+  if (targetView === 'sa-analytics') {
+    loadAnalyticsData();
+  }
   
   // Close mobile drawer on link select
   const sidebar = document.getElementById('sidebar-menu');
@@ -779,6 +763,28 @@ function switchView(viewName) {
     setTimeout(() => {
       window.dispatchEvent(new Event('resize'));
     }, 50);
+  }
+}
+
+async function loadAnalyticsData() {
+  const token = sessionStorage.getItem('cib_jwt_token');
+  try {
+    const res = await fetch('/api/dashboard/analytics', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const result = await res.json();
+    if (res.ok && result.success) {
+      const data = result.data;
+      const avgResTimeEl = document.getElementById('analytics-avg-resolution-time');
+      const resRateEl = document.getElementById('analytics-resolution-rate');
+      const auditAccEl = document.getElementById('analytics-audit-accuracy-rate');
+      
+      if (avgResTimeEl) avgResTimeEl.textContent = data.averageResolutionTime || '0.0 Days';
+      if (resRateEl) resRateEl.textContent = data.resolutionRate || '0.0%';
+      if (auditAccEl) auditAccEl.textContent = '100.0%';
+    }
+  } catch (err) {
+    console.error('Failed to load analytics data:', err);
   }
 }
 
@@ -824,15 +830,39 @@ function animateCounter(elementId, targetValue, duration = 800) {
 
 // Statistics counts
 function renderCounts() {
-  const activeCount = window.CIB_DB.cases.filter(c => c.status === 'Active').length;
-  const solvedCount = window.CIB_DB.cases.filter(c => c.status === 'Solved').length;
+  const activeCount = window.CIB_DB.kpis?.activeCases ?? window.CIB_DB.cases.filter(c => c.status === 'Active').length;
+  const solvedCount = window.CIB_DB.kpis?.closedCases ?? window.CIB_DB.cases.filter(c => c.status === 'Solved').length;
   const highPriority = window.CIB_DB.cases.filter(c => c.priority === 'High' || c.priority === 'Critical').length;
-  const evidenceCount = (window.CIB_DB.evidence || []).length;
+  const evidenceCount = window.CIB_DB.kpis?.evidenceFiles ?? (window.CIB_DB.evidence || []).length;
   
   animateCounter('count-active', activeCount);
   animateCounter('count-solved', solvedCount);
   animateCounter('count-priority', highPriority);
   animateCounter('count-evidence', evidenceCount);
+
+  const currentOfficerId = sessionStorage.getItem('cib_officer_id');
+  const activeRole = sessionStorage.getItem('cib_officer_role');
+
+  if (activeRole === 'INSPECTOR') {
+    const ioAssigned = window.CIB_DB.cases.filter(c => c.officerId === currentOfficerId).length;
+    const ioEvidence = window.CIB_DB.evidence.length;
+    animateCounter('io-assigned-count', ioAssigned);
+    animateCounter('io-evidence-count', ioEvidence);
+  }
+
+  if (activeRole === 'FORENSIC_OFFICER') {
+    const foPending = window.CIB_DB.forensics.filter(f => f.status === 'Pending Analysis').length;
+    const foCompleted = window.CIB_DB.forensics.filter(f => f.status === 'Approved' || f.status === 'Forensic Report Submitted').length;
+    animateCounter('fo-pending-requests', foPending);
+    animateCounter('fo-completed-profiles', foCompleted);
+  }
+
+  if (activeRole === 'SUPERINTENDENT') {
+    const spAwaiting = window.CIB_DB.kpis?.pendingReviews ?? window.CIB_DB.forensics.filter(f => f.status !== 'Approved').length;
+    const spSolved = window.CIB_DB.kpis?.closedCases ?? window.CIB_DB.cases.filter(c => c.status === 'Solved').length;
+    animateCounter('sp-awaiting-review', spAwaiting);
+    animateCounter('sp-solved-cases', spSolved);
+  }
 }
 
 // Render checklist Tasks
@@ -1006,8 +1036,8 @@ function renderCasesTable(filteredList = null) {
         } else {
           actionBtnHtml = `
             <div style="display: flex; gap: 6px;">
-              <button class="btn-primary" style="padding: 6px 10px; font-size: 11px; width: auto;" onclick="showEvidenceUploadModal('${item.linkedCaseId || item.id}')"><i class="ri-upload-cloud-line"></i> Upload Evidence</button>
-              <button class="btn-primary" style="padding: 6px 10px; font-size: 11px; width: auto; background-color: var(--warning-color);" onclick="showRequestForensicModal('${item.linkedCaseId || item.id}')"><i class="ri-flask-line"></i> Send to Forensics</button>
+              <button class="btn-primary" style="padding: 6px 10px; font-size: 11px; width: auto;" onclick="showEvidenceUploadModal('${item.linkedCaseId}')"><i class="ri-upload-cloud-line"></i> Upload Evidence</button>
+              <button class="btn-primary" style="padding: 6px 10px; font-size: 11px; width: auto; background-color: var(--warning-color);" onclick="showRequestForensicModal('${item.linkedCaseId}')"><i class="ri-flask-line"></i> Send to Forensics</button>
             </div>
           `;
         }
@@ -1015,7 +1045,7 @@ function renderCasesTable(filteredList = null) {
         // FORENSIC_OFFICER: Upload Forensic Report, Complete Analysis.
         actionBtnHtml = `
           <div style="display: flex; gap: 6px;">
-            <button class="btn-primary" style="padding: 6px 10px; font-size: 11px; width: auto; background-color: var(--success-color);" onclick="showSubmitForensicModal('${item.linkedCaseId || item.id}', '${item.linkedCaseId || item.id}')"><i class="ri-file-upload-line"></i> Upload Report</button>
+            <button class="btn-primary" style="padding: 6px 10px; font-size: 11px; width: auto; background-color: var(--success-color);" onclick="showSubmitForensicModal('${item.linkedCaseId}', '${item.linkedCaseId}')"><i class="ri-file-upload-line"></i> Upload Report</button>
           </div>
         `;
       } else if (activeRole === 'INSPECTOR') {

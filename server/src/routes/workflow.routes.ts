@@ -151,6 +151,12 @@ router.post('/create-case', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SU
           { note: `Case initialized from FIR. Assigned Officer ID: ${targetOfficerId}. Victim: ${victimName}. Suspect: ${suspectName}.`, author: req.user.name }
         ]
       },
+      assignmentHistory: {
+        create: {
+          officerId: targetOfficerId,
+          assignedBy: req.user.officerId
+        }
+      },
       firId
     }
   });
@@ -179,7 +185,13 @@ router.post('/assign-inspector', authenticateToken, authorizeRoles('SUPER_ADMIN'
   const updatedCase = await prisma.case.update({
     where: { id: caseId },
     data: {
-      officerId: inspectorId
+      officerId: inspectorId,
+      assignmentHistory: {
+        create: {
+          officerId: inspectorId,
+          assignedBy: req.user.officerId
+        }
+      }
     }
   });
 
@@ -211,13 +223,8 @@ router.post('/assign-inspector', authenticateToken, authorizeRoles('SUPER_ADMIN'
 router.post('/request-forensic', authenticateToken, authorizeRoles('SUPER_ADMIN', 'INSPECTOR', 'SUB_INSPECTOR'), asyncHandler(async (req: any, res: any) => {
   const { reportId, caseId, type, summary } = req.body;
 
-  const targetCase = await prisma.case.findFirst({
-    where: {
-      OR: [
-        { id: caseId },
-        { firId: caseId }
-      ]
-    }
+  const targetCase = await prisma.case.findUnique({
+    where: { id: caseId }
   });
 
   if (!targetCase) {
