@@ -1454,31 +1454,82 @@
 
   <!-- Forced First Login Password Change Modal -->
   <div id="modal-first-login-change-password" class="modal-overlay">
-    <div class="modal-container" style="max-width: 480px;">
-      <div class="modal-header" style="border-bottom: 1px solid var(--border-color);">
-        <h3 class="modal-title" style="color: var(--warning-color);"><i class="ri-lock-password-line"></i> Mandatory First Login Password Change</h3>
+    <div class="modal-container" style="max-width: 520px; border-radius: 12px;">
+      <div class="modal-header" style="border-bottom: 1px solid var(--border-color); padding-bottom: 14px;">
+        <h3 class="modal-title" style="color: var(--warning-color); font-weight: 700; font-size: 16px;"><i class="ri-shield-keyhole-line"></i> Enterprise First-Time Security Authentication</h3>
       </div>
       <form id="first-login-password-form" onsubmit="handleFirstLoginPasswordChangeSubmit(event)">
         <div class="modal-body" style="display: flex; flex-direction: column; gap: 16px; padding: 20px 0;">
-          <p style="font-size: 13px; color: var(--text-secondary); line-height: 1.5;">Your account is operating on a temporary password. You must create a new permanent password before accessing the Crime Investigation Board.</p>
-          <div class="form-group">
-            <label class="form-label" for="first-login-old-password">Current Temporary Password</label>
-            <input type="password" id="first-login-old-password" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
+          <!-- Officer Metadata Header Box -->
+          <div style="background: var(--card-color); border: 1px solid var(--border-color); padding: 14px; border-radius: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px;">
+            <div>
+              <span style="color: var(--text-secondary); text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em;">Officer ID</span>
+              <div id="first-login-officer-id" style="font-family: monospace; font-weight: 700; color: var(--primary-color); font-size: 14px; margin-top: 2px;">--</div>
+            </div>
+            <div>
+              <span style="color: var(--text-secondary); text-transform: uppercase; font-size: 10px; letter-spacing: 0.05em;">Officer Name & Role</span>
+              <div id="first-login-officer-meta" style="font-weight: 600; color: #FFF; font-size: 13px; margin-top: 2px;">--</div>
+            </div>
           </div>
-          <div class="form-group">
-            <label class="form-label" for="first-login-new-password">New Password</label>
-            <input type="password" id="first-login-new-password" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
+
+          <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.5; margin: 0;">Your account is operating on a temporary password. Update your password to establish secure credentials before accessing the CIB platform.</p>
+
+          <!-- Error Alert Box -->
+          <div id="first-login-modal-error" style="display: none; background-color: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); padding: 10px 14px; border-radius: 6px; font-size: 12px; color: #EF4444; line-height: 1.4;">
+            <i class="ri-error-warning-line"></i> <span id="first-login-modal-error-text"></span>
           </div>
+
+          <!-- Current Temporary Password Input -->
           <div class="form-group">
-            <label class="form-label" for="first-login-confirm-password">Confirm New Password</label>
-            <input type="password" id="first-login-confirm-password" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
+            <label class="form-label" for="first-login-old-password" style="font-size: 12px;">Current Temporary Password</label>
+            <div style="position: relative;">
+              <input type="password" id="first-login-old-password" class="form-input" style="width: 100%; padding: 10px 36px 10px 12px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
+              <i id="toggle-old-pwd-icon" class="ri-eye-line" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); cursor: pointer;" onclick="togglePasswordVisibility('first-login-old-password', 'toggle-old-pwd-icon')"></i>
+            </div>
           </div>
-          <div style="background: rgba(37,99,235,0.08); border: 1px solid rgba(37,99,235,0.2); padding: 10px; border-radius: 6px; font-size: 11px; color: var(--text-secondary); line-height: 1.5;">
-            <strong>Password Requirements:</strong> Minimum 8 characters, at least 1 uppercase letter, 1 lowercase letter, 1 number, and 1 special character (!@#$%^&*).
+
+          <!-- New Password Input -->
+          <div class="form-group">
+            <label class="form-label" for="first-login-new-password" style="font-size: 12px;">New Password</label>
+            <div style="position: relative;">
+              <input type="password" id="first-login-new-password" class="form-input" style="width: 100%; padding: 10px 36px 10px 12px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required oninput="validateFirstLoginPasswordInputs()">
+              <i id="toggle-new-pwd-icon" class="ri-eye-line" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); cursor: pointer;" onclick="togglePasswordVisibility('first-login-new-password', 'toggle-new-pwd-icon')"></i>
+            </div>
+          </div>
+
+          <!-- Live Password Strength Meter Bar -->
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-secondary);">
+              <span>Password Strength:</span>
+              <strong id="password-strength-label" style="color: var(--danger-color);">Too Weak</strong>
+            </div>
+            <div style="width: 100%; height: 6px; background-color: var(--card-color); border-radius: 3px; overflow: hidden; border: 1px solid var(--border-color);">
+              <div id="password-strength-bar" style="width: 0%; height: 100%; background-color: var(--danger-color); transition: width 0.3s, background-color 0.3s;"></div>
+            </div>
+          </div>
+
+          <!-- Confirm Password Input -->
+          <div class="form-group">
+            <label class="form-label" for="first-login-confirm-password" style="font-size: 12px;">Confirm New Password</label>
+            <div style="position: relative;">
+              <input type="password" id="first-login-confirm-password" class="form-input" style="width: 100%; padding: 10px 36px 10px 12px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required oninput="validateFirstLoginPasswordInputs()">
+              <i id="toggle-confirm-pwd-icon" class="ri-eye-line" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--text-secondary); cursor: pointer;" onclick="togglePasswordVisibility('first-login-confirm-password', 'toggle-confirm-pwd-icon')"></i>
+            </div>
+          </div>
+
+          <!-- Requirements Live Checklist -->
+          <div style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-color); padding: 12px; border-radius: 6px; font-size: 11px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <div id="req-length" style="color: var(--danger-color); display: flex; align-items: center; gap: 6px;"><i class="ri-close-circle-line"></i> Min 8 Characters</div>
+            <div id="req-upper" style="color: var(--danger-color); display: flex; align-items: center; gap: 6px;"><i class="ri-close-circle-line"></i> Uppercase Letter (A-Z)</div>
+            <div id="req-lower" style="color: var(--danger-color); display: flex; align-items: center; gap: 6px;"><i class="ri-close-circle-line"></i> Lowercase Letter (a-z)</div>
+            <div id="req-number" style="color: var(--danger-color); display: flex; align-items: center; gap: 6px;"><i class="ri-close-circle-line"></i> Number (0-9)</div>
+            <div id="req-special" style="color: var(--danger-color); display: flex; align-items: center; gap: 6px;"><i class="ri-close-circle-line"></i> Special Char (!@#$%^&*)</div>
+            <div id="req-match" style="color: var(--danger-color); display: flex; align-items: center; gap: 6px;"><i class="ri-close-circle-line"></i> Passwords Match</div>
           </div>
         </div>
-        <div class="modal-footer">
-          <button type="submit" class="btn-primary" style="width: 100%; background-color: var(--success-color);" id="first-login-password-submit-btn"><i class="ri-key-line"></i> Change Password & Activate Access</button>
+        <div class="modal-footer" style="display: flex; gap: 10px; border-top: 1px solid var(--border-color); padding-top: 14px;">
+          <button type="button" class="btn-primary" style="background-color: transparent; border: 1px solid var(--border-light); color: var(--text-primary); width: auto;" onclick="hideModal('modal-first-login-change-password')">Cancel</button>
+          <button type="submit" class="btn-primary" style="width: auto; flex: 1; background-color: var(--primary-color);" id="first-login-password-submit-btn" disabled><i class="ri-key-line"></i> Update Password</button>
         </div>
       </form>
     </div>

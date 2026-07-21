@@ -223,52 +223,15 @@ async function handleLogin(event) {
       const data = await response.json();
       if (response.ok) {
         if (data.data && data.data.passwordChangeRequired) {
-          triggerToast("First-time login: Please update your password.", "warning");
-          // Handle force password change dialog if needed, or prompt
-          const newPassword = prompt("First-Time Login: Please enter a new password (min 6 chars):");
-          if (!newPassword || newPassword.length < 6) {
-            triggerToast("Password change cancelled or too short. Login aborted.", "danger");
-            setAuthLoading(false);
-            return;
-          }
-          const changeResponse = await fetch('/api/auth/change-password', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ officerId, oldPassword: password, newPassword })
-          });
-          const changeData = await changeResponse.json();
-          if (changeResponse.ok) {
-            triggerToast("Password successfully changed. Proceeding with login...", "success");
-            // Automatically log in with new password
-            const newLoginResponse = await fetch('/api/auth/request-otp', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ officerId, password: newPassword })
-            });
-            const newLoginData = await newLoginResponse.json();
-            if (newLoginResponse.ok) {
-              if (newLoginData.data && newLoginData.data.bypassOtp) {
-                sessionStorage.setItem('cib_session_active', 'true');
-                sessionStorage.setItem('cib_jwt_token', newLoginData.data.token);
-                sessionStorage.setItem('cib_officer_id', officerId);
-                sessionStorage.setItem('cib_officer_role', newLoginData.data.role);
-                sessionStorage.setItem('cib_officer_name', newLoginData.data.name);
-                triggerToast(`Access Verified. Welcome ${newLoginData.data.name}. Redirecting...`, "success");
-                setTimeout(() => initDashboard(), 1000);
-                return;
-              }
-              triggerToast("One-time security verification code dispatched to registered officer device.", "success");
-              stage2FA = true;
-              document.getElementById('officer-id').disabled = true;
-              document.getElementById('password').disabled = true;
-              document.getElementById('otp-form-group').style.display = 'block';
-              document.querySelector('.otp-box').focus();
-            } else {
-              triggerToast("Failed to request verification code after password change.", "danger");
-            }
-          } else {
-            triggerToast(changeData.error || "Password update failed.", "danger");
-          }
+          triggerToast("First-time login: Password update required.", "warning");
+          sessionStorage.setItem('cib_pending_officer_id', officerId);
+          document.getElementById('first-login-officer-id').textContent = officerId;
+          document.getElementById('first-login-officer-meta').textContent = `${officerId} (Official Account)`;
+          document.getElementById('first-login-old-password').value = password;
+          document.getElementById('first-login-new-password').value = '';
+          document.getElementById('first-login-confirm-password').value = '';
+          validateFirstLoginPasswordInputs();
+          showModal('modal-first-login-change-password');
           setAuthLoading(false);
           return;
         }
@@ -1720,20 +1683,106 @@ function copyOfficerCredentials() {
   });
 }
 
+function togglePasswordVisibility(inputId, iconId) {
+  const input = document.getElementById(inputId);
+  const icon = document.getElementById(iconId);
+  if (!input || !icon) return;
+
+  if (input.type === 'password') {
+    input.type = 'text';
+    icon.className = 'ri-eye-off-line';
+  } else {
+    input.type = 'password';
+    icon.className = 'ri-eye-line';
+  }
+}
+
+function validateFirstLoginPasswordInputs() {
+  const newPwd = document.getElementById('first-login-new-password').value;
+  const confirmPwd = document.getElementById('first-login-confirm-password').value;
+  const submitBtn = document.getElementById('first-login-password-submit-btn');
+
+  const hasLength = newPwd.length >= 8;
+  const hasUpper = /[A-Z]/.test(newPwd);
+  const hasLower = /[a-z]/.test(newPwd);
+  const hasNumber = /[0-9]/.test(newPwd);
+  const hasSpecial = /[!@#$%^&*(),.?":{}|<>]/.test(newPwd);
+  const matches = newPwd.length > 0 && newPwd === confirmPwd;
+
+  const setReq = (id, text, pass) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (pass) {
+      el.style.color = 'var(--success-color)';
+      el.innerHTML = `<i class="ri-checkbox-circle-line"></i> ${text}`;
+    } else {
+      el.style.color = 'var(--danger-color)';
+      el.innerHTML = `<i class="ri-close-circle-line"></i> ${text}`;
+    }
+  };
+
+  setReq('req-length', 'Min 8 Characters', hasLength);
+  setReq('req-upper', 'Uppercase Letter (A-Z)', hasUpper);
+  setReq('req-lower', 'Lowercase Letter (a-z)', hasLower);
+  setReq('req-number', 'Number (0-9)', hasNumber);
+  setReq('req-special', 'Special Char (!@#$%^&*)', hasSpecial);
+  setReq('req-match', 'Passwords Match', matches);
+
+  // Live Password Strength Meter
+  let score = 0;
+  if (hasLength) score++;
+  if (hasUpper) score++;
+  if (hasLower) score++;
+  if (hasNumber) score++;
+  if (hasSpecial) score++;
+
+  const strengthBar = document.getElementById('password-strength-bar');
+  const strengthLabel = document.getElementById('password-strength-label');
+
+  if (strengthBar && strengthLabel) {
+    if (newPwd.length === 0) {
+      strengthBar.style.width = '0%';
+      strengthBar.style.backgroundColor = 'var(--danger-color)';
+      strengthLabel.style.color = 'var(--danger-color)';
+      strengthLabel.textContent = 'Too Weak';
+    } else if (score <= 2) {
+      strengthBar.style.width = '25%';
+      strengthBar.style.backgroundColor = 'var(--danger-color)';
+      strengthLabel.style.color = 'var(--danger-color)';
+      strengthLabel.textContent = 'Weak';
+    } else if (score === 3 || score === 4) {
+      strengthBar.style.width = '65%';
+      strengthBar.style.backgroundColor = 'var(--warning-color)';
+      strengthLabel.style.color = 'var(--warning-color)';
+      strengthLabel.textContent = 'Good';
+    } else if (score === 5) {
+      strengthBar.style.width = '100%';
+      strengthBar.style.backgroundColor = 'var(--success-color)';
+      strengthLabel.style.color = 'var(--success-color)';
+      strengthLabel.textContent = 'Strong';
+    }
+  }
+
+  const isValid = hasLength && hasUpper && hasLower && hasNumber && hasSpecial && matches;
+  if (submitBtn) {
+    submitBtn.disabled = !isValid;
+  }
+}
+
 async function handleFirstLoginPasswordChangeSubmit(event) {
   event.preventDefault();
   const oldPassword = document.getElementById('first-login-old-password').value;
   const newPassword = document.getElementById('first-login-new-password').value;
   const confirmPassword = document.getElementById('first-login-confirm-password').value;
 
-  if (newPassword !== confirmPassword) {
-    triggerToast("New password and confirmation password do not match.", "danger");
-    return;
-  }
+  const errorBox = document.getElementById('first-login-modal-error');
+  const errorText = document.getElementById('first-login-modal-error-text');
 
-  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>]).{8,}$/;
-  if (!passwordRegex.test(newPassword)) {
-    triggerToast("Password must be at least 8 chars with uppercase, lowercase, number & special char.", "danger");
+  if (newPassword !== confirmPassword) {
+    if (errorBox && errorText) {
+      errorText.textContent = "New password and confirmation password do not match.";
+      errorBox.style.display = 'flex';
+    }
     return;
   }
 
@@ -1754,21 +1803,32 @@ async function handleFirstLoginPasswordChangeSubmit(event) {
       body: JSON.stringify({ officerId, oldPassword, newPassword })
     });
     const result = await res.json();
+
     if (res.ok && result.success) {
-      triggerToast("Password successfully changed! Proceed with your new password.", "success");
+      if (errorBox) errorBox.style.display = 'none';
+      triggerToast("Password successfully updated! Proceeding to Dashboard.", "success");
       hideModal('modal-first-login-change-password');
       sessionStorage.removeItem('cib_pending_officer_id');
       document.getElementById('first-login-password-form').reset();
-      window.location.reload();
+      await initDashboard();
     } else {
-      triggerToast(result.error || "Password change failed.", "danger");
+      const msg = result.error || result.message || "Password update failed.";
+      if (errorBox && errorText) {
+        errorText.textContent = msg;
+        errorBox.style.display = 'flex';
+      }
+      triggerToast(msg, "danger");
     }
   } catch (err) {
     console.error(err);
+    if (errorBox && errorText) {
+      errorText.textContent = "Server connection error. Please try again.";
+      errorBox.style.display = 'flex';
+    }
     triggerToast("Server connection error.", "danger");
   } finally {
     submitBtn.disabled = false;
-    submitBtn.innerHTML = `<i class="ri-key-line"></i> Change Password & Activate Access`;
+    submitBtn.innerHTML = `<i class="ri-key-line"></i> Update Password`;
   }
 }
 
@@ -3007,6 +3067,8 @@ window.handleRequestForensicSubmit = handleRequestForensicSubmit;
 window.showSubmitForensicModal = showSubmitForensicModal;
 window.handleSubmitForensicSubmit = handleSubmitForensicSubmit;
 window.copyOfficerCredentials = copyOfficerCredentials;
+window.togglePasswordVisibility = togglePasswordVisibility;
+window.validateFirstLoginPasswordInputs = validateFirstLoginPasswordInputs;
 window.handleFirstLoginPasswordChangeSubmit = handleFirstLoginPasswordChangeSubmit;
 window.showReviewCaseModal = showReviewCaseModal;
 window.handleReviewCaseSubmit = handleReviewCaseSubmit;
