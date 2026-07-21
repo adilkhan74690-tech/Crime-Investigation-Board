@@ -245,6 +245,17 @@ router.post('/request-forensic', authenticateToken, authorizeRoles('SUPER_ADMIN'
     }
   });
 
+  // Update FIR status to UNDER_FORENSIC_REVIEW
+  await prisma.fir.updateMany({
+    where: {
+      OR: [
+        { id: validCaseId },
+        { case: { id: validCaseId } }
+      ]
+    },
+    data: { status: 'UNDER_FORENSIC_REVIEW' }
+  });
+
   await logWorkflowAction(req, req.user.officerId, req.user.role, 'Forensic Requested', `Forensic analysis requested for case ${validCaseId}.`, validCaseId);
   
   await prisma.timeline.create({

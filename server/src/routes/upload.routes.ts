@@ -8,6 +8,8 @@ import { asyncHandler } from '../utils/asyncHandler';
 import { ApiError } from '../utils/apiError';
 import { NotificationService } from '../services/notification.service';
 import { logAudit } from '../utils/auditLogger';
+import fs from 'fs';
+import path from 'path';
 
 const router = Router();
 
@@ -117,15 +119,59 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
     // Compute file SHA256 hash checksum for evidence authenticity tracking
     const fileHash = crypto.createHash('sha256').update(req.file.buffer).digest('hex');
 
-    // 3 & 4. Upload to Cloudinary cib/evidence folder
-    let uploadResult: { secure_url: string; public_id: string; resource_type: string; format: string };
-    try {
-      console.log('[DEBUG UPLOAD] STEP 3: Initiating Cloudinary upload...');
-      uploadResult = await CloudinaryService.uploadFile(req.file.buffer, req.file.originalname, 'evidence');
-      console.log('[DEBUG UPLOAD] STEP 3 SUCCESS: Cloudinary upload result:', uploadResult);
-    } catch (cloudErr: any) {
-      console.error('[DEBUG UPLOAD ERROR] Cloudinary upload failed:', cloudErr?.stack || cloudErr);
-      throw new ApiError(500, `Cloudinary upload failed: ${cloudErr.message || cloudErr}`);
+    // 3 & 4. Upload to Cloudinary cib/evidence folder (with local disk fallback)
+    let uploadResult: { secure_url: string; public_id: string | null; resource_type: string; format: string } | null = null;
+    
+    const isCloudinaryConfigured = !!(
+      process.env.CLOUDINARY_CLOUD_NAME &&
+      process.env.CLOUDINARY_API_KEY &&
+      process.env.CLOUDINARY_API_SECRET &&
+      process.env.CLOUDINARY_CLOUD_NAME !== 'mock_cloud' &&
+      process.env.CLOUDINARY_API_KEY !== 'mock_key' &&
+      process.env.CLOUDINARY_API_SECRET !== 'mock_secret'
+    );
+
+    if (isCloudinaryConfigured) {
+      try {
+        console.log('[DEBUG UPLOAD] STEP 3: Initiating Cloudinary upload...');
+        const cloudRes = await CloudinaryService.uploadFile(req.file.buffer, req.file.originalname, 'evidence');
+        uploadResult = {
+          secure_url: cloudRes.secure_url,
+          public_id: cloudRes.public_id,
+          resource_type: cloudRes.resource_type,
+          format: cloudRes.format
+        };
+        console.log('[DEBUG UPLOAD] STEP 3 SUCCESS: Cloudinary upload result:', uploadResult);
+      } catch (cloudErr: any) {
+        console.warn('[DEBUG UPLOAD WARNING] Cloudinary upload failed, falling back to local file system:', cloudErr?.message || cloudErr);
+      }
+    }
+
+    if (!uploadResult) {
+      console.log('[DEBUG UPLOAD] Saving file locally...');
+      try {
+        const uploadsDir = path.join(__dirname, '../../../uploads');
+        if (!fs.existsSync(uploadsDir)) {
+          fs.mkdirSync(uploadsDir, { recursive: true });
+        }
+        const fileExt = req.file.originalname.split('.').pop() || '';
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        const localFileName = `${uniqueSuffix}.${fileExt}`;
+        const localFilePath = path.join(uploadsDir, localFileName);
+        
+        fs.writeFileSync(localFilePath, req.file.buffer);
+        console.log('[DEBUG UPLOAD] File saved locally to:', localFilePath);
+        
+        uploadResult = {
+          secure_url: `/uploads/${localFileName}`,
+          public_id: null,
+          resource_type: req.file.mimetype.split('/')[0] || 'file',
+          format: fileExt
+        };
+      } catch (localErr: any) {
+        console.error('[DEBUG UPLOAD ERROR] Local file saving failed:', localErr);
+        throw new ApiError(500, `Evidence upload failed: local file saving error: ${localErr.message}`);
+      }
     }
 
     const evidenceId = `EVID-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;

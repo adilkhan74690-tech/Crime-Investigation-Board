@@ -67,6 +67,7 @@ export class FirController {
     }
 
     const creatorOfficerId = (req as any).user.officerId;
+    const creatorRole = (req as any).user.role;
     const parsedDate = incidentDate ? new Date(incidentDate) : new Date();
 
     // 1. REAL INVESTIGATION WORKFLOW: Status = Registered, assignedOfficer = null
@@ -83,7 +84,7 @@ export class FirController {
         status: 'Registered',
         remarks: null,
         date: parsedDate,
-        officerId: null
+        officerId: creatorRole === 'SUB_INSPECTOR' ? creatorOfficerId : null
       },
       include: {
         officer: {

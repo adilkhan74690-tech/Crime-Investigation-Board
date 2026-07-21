@@ -29,6 +29,7 @@ app.use(morgan('dev'));
 
 // Serve frontend static assets
 app.use(express.static(path.join(__dirname, '../../')));
+app.use('/uploads', express.static(path.join(__dirname, '../../uploads')));
 
 // Secure REST Endpoint routers integration
 app.use('/api/auth', authRoutes);

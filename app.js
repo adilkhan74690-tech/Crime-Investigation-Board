@@ -1986,6 +1986,11 @@ async function handleFirstLoginPasswordChangeSubmit(event) {
 
     if (res.ok && result.success) {
       if (errorBox) errorBox.style.display = 'none';
+      sessionStorage.setItem('cib_session_active', 'true');
+      sessionStorage.setItem('cib_jwt_token', result.data.token);
+      sessionStorage.setItem('cib_officer_id', officerId);
+      sessionStorage.setItem('cib_officer_role', result.data.role);
+      sessionStorage.setItem('cib_officer_name', result.data.name);
       triggerToast("Password successfully updated! Proceeding to Dashboard.", "success");
       hideModal('modal-first-login-change-password');
       sessionStorage.removeItem('cib_pending_officer_id');

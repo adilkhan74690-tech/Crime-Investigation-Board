@@ -14,16 +14,31 @@ router.get('/dashboard-payload', authenticateToken, asyncHandler(async (req: any
   // Filter cases by role
   let caseWhereClause: any = {};
   if (role === 'INSPECTOR' || role === 'SUB_INSPECTOR') {
-    caseWhereClause.assignmentHistory = {
-      some: {
-        officerId: officerId
+    caseWhereClause.OR = [
+      { officerId: officerId },
+      { createdBy: officerId },
+      {
+        assignmentHistory: {
+          some: {
+            officerId: officerId
+          }
+        }
       }
-    };
+    ];
   }
 
-  const cases = await prisma.case.findMany({
+  const rawCases = await prisma.case.findMany({
     where: caseWhereClause,
-    include: { witnesses: true, timeline: true, evidence: true, forensics: true, victims: true, suspects: true }
+    include: { witnesses: true, timeline: true, evidence: true, forensics: true, victims: true, suspects: true, fir: true }
+  });
+
+  const cases = rawCases.map((c: any) => {
+    const hasForensic = c.forensics && c.forensics.length > 0;
+    const isUnderForensicReview = hasForensic || (c.fir && c.fir.status === 'UNDER_FORENSIC_REVIEW');
+    return {
+      ...c,
+      status: isUnderForensicReview ? 'UNDER_FORENSIC_REVIEW' : c.status
+    };
   });
 
   const officers = await prisma.officer.findMany({
