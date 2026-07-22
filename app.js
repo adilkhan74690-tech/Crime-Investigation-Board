@@ -2491,72 +2491,252 @@ function renderReportOptions() {
   });
 }
 
-function generateReportType(reportType) {
-  const caseId = document.getElementById('report-case-select').value;
-  const target = window.CIB_DB.cases.find(c => c.id === caseId);
-  if (!target) return;
-  
+async function generateReportType(reportType) {
+  const selector = document.getElementById('report-case-select');
+  if (!selector || !selector.value) {
+    triggerToast("Please select a target investigation case first.", "warning");
+    return;
+  }
+  const caseId = selector.value;
   const preview = document.getElementById('report-doc-preview');
-  
-  let docContent = `========================================================\n`;
-  docContent += `             CRIME INVESTIGATION BOARD REPORT            \n`;
-  docContent += `========================================================\n`;
-  docContent += `Report Type    : ${reportType}\n`;
-  docContent += `Target Case ID : ${target.id}\n`;
-  docContent += `Classification : INTERNAL SECURE USE ONLY\n`;
-  docContent += `Timestamp      : ${new Date().toISOString()}\n`;
-  docContent += `Lead Officer   : ${target.assignedOfficer || 'Marcus Vance'}\n`;
-  docContent += `--------------------------------------------------------\n\n`;
-  
-  if (reportType === 'Chargesheet') {
-    docContent += `SUSPECT LIST:\n`;
-    const suspects = target.suspects || [];
-    suspects.forEach(s => {
-      docContent += `- ${s}\n`;
+  preview.textContent = "Loading authentic case data from PostgreSQL database...";
+
+  const token = sessionStorage.getItem('cib_jwt_token');
+  let target = null;
+  try {
+    const res = await fetch(`/api/dashboard/reports/case/${caseId}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
     });
-    docContent += `\nCASE NOTES:\n${target.notes || 'No notes logged.'}\n\n`;
-    docContent += `STATUS: Charges proposed for Grand Jury indictment.`;
-  } else if (reportType === 'Final Summary') {
-    docContent += `INCIDENT SUMMARY & STATUS:\n`;
-    docContent += `The case details events originating on ${target.createdDate} at ${target.location}.\n`;
-    docContent += `Status is marked as ${target.status}.\n\n`;
-    docContent += `RESOLVED METRICS:\n`;
-    const timeline = target.timeline || [];
-    docContent += `Investigation steps complete: ${timeline.filter((t) => t.completed).length} of ${timeline.length}.`;
-  } else {
-    docContent += `EVIDENCE SUMMARY LOGS:\n`;
-    const relatedEv = window.CIB_DB.evidence.filter(e => e.caseId === caseId);
-    if (relatedEv.length === 0) {
-      docContent += `No items registered for this case in the secure vault.`;
+    const data = await res.json();
+    if (res.ok && data.success && data.data) {
+      target = data.data;
+    }
+  } catch (err) {
+    console.error("Backend fetch error, falling back to local state:", err);
+  }
+
+  if (!target) {
+    target = window.CIB_DB.cases.find(c => c.id === caseId || c.firId === caseId);
+  }
+
+  if (!target) {
+    preview.textContent = "Error: Case payload could not be loaded from database.";
+    triggerToast("Case record not found.", "danger");
+    return;
+  }
+
+  const generatedDate = new Date().toLocaleString();
+  const leadOfficerName = target.assignedOfficer?.user?.name || target.assignedOfficer?.name || target.officerId || 'Lead Detective';
+  const officerRank = target.assignedOfficer?.rank || 'Inspector';
+  const linkedFir = target.fir || (window.CIB_DB.firs || []).find(f => f.id === target.firId || f.id === target.id) || {};
+  const evidenceItems = target.evidence || (window.CIB_DB.evidence || []).filter(e => e.caseId === target.id);
+  const timelineSteps = target.timeline || [];
+  const caseNotes = target.caseNotes || [];
+  const forensicReports = target.forensics || (window.CIB_DB.forensics || []).filter(f => f.caseId === target.id);
+  const suspects = target.suspects || [];
+  const victims = target.victims || [];
+  const witnesses = target.witnesses || [];
+
+  let doc = `========================================================================================\n`;
+  doc += `                    CRIME INVESTIGATION BOARD (CIB) - OFFICIAL REPORT                    \n`;
+  doc += `========================================================================================\n`;
+  doc += `REPORT TYPE         : ${reportType.toUpperCase()}\n`;
+  doc += `CASE NUMBER / ID    : ${target.id}\n`;
+  doc += `FIR REFERENCE ID    : ${target.firId || linkedFir.id || 'N/A'}\n`;
+  doc += `CLASSIFICATION      : LAW ENFORCEMENT RESTRICTED / CONFIDENTIAL\n`;
+  doc += `GENERATED TIMESTAMP : ${generatedDate}\n`;
+  doc += `LEAD OFFICER        : ${leadOfficerName} (${officerRank})\n`;
+  doc += `CURRENT CASE STATUS : ${target.status}\n`;
+  doc += `----------------------------------------------------------------------------------------\n\n`;
+
+  if (reportType === 'Chargesheet') {
+    doc += `[ 1. ACCUSED / PRIMARY SUSPECTS ]\n`;
+    if (suspects.length === 0) {
+      doc += `   None officially named in chargesheet.\n`;
     } else {
-      relatedEv.forEach(e => {
-        docContent += `- ${e.id} [${e.category}]: ${e.name} (Status: ${e.verificationStatus})\n`;
+      suspects.forEach((s, idx) => {
+        const sName = typeof s === 'object' ? s.name : s;
+        const sAlias = typeof s === 'object' && s.aliases ? ` (Alias: ${s.aliases})` : '';
+        doc += `   ${idx + 1}. Accused: ${sName}${sAlias}\n`;
+      });
+    }
+
+    doc += `\n[ 2. COMPLAINANT & VICTIM INFORMATION ]\n`;
+    doc += `   Complainant / Reporter: ${linkedFir.reporter || 'N/A'} (Contact: ${linkedFir.complainantContact || 'N/A'})\n`;
+    if (victims.length > 0) {
+      victims.forEach((v, idx) => {
+        doc += `   Victim ${idx + 1}: ${v.name || v} (Contact: ${v.contact || 'N/A'})\n`;
+      });
+    }
+
+    doc += `\n[ 3. INCIDENT & OFFENSE SUMMARY ]\n`;
+    doc += `   Crime Category : ${target.crimeType || linkedFir.crimeCategory || 'General Offense'}\n`;
+    doc += `   Location       : ${target.location || linkedFir.location || 'N/A'}\n`;
+    doc += `   Incident Brief : ${linkedFir.description || target.title || 'No brief recorded.'}\n`;
+
+    doc += `\n[ 4. INVESTIGATION FINDINGS & OFFICERS NOTES ]\n`;
+    if (caseNotes.length === 0) {
+      doc += `   No formal investigation notes logged.\n`;
+    } else {
+      caseNotes.forEach(n => {
+        doc += `   - [${n.author || 'Officer'}]: ${n.note}\n`;
+      });
+    }
+
+    doc += `\n[ 5. FORENSIC EVIDENCE & LAB ATTACHMENTS ]\n`;
+    if (forensicReports.length === 0) {
+      doc += `   No forensic analysis reports attached.\n`;
+    } else {
+      forensicReports.forEach(f => {
+        doc += `   - Report: ${f.reportTitle || f.type} | Status: ${f.status} | Analyst: ${f.analyst}\n`;
+        doc += `     Findings: ${f.summary}\n`;
+      });
+    }
+
+    doc += `\n[ 6. CHARGESHEET AUTHORIZATION & SIGN-OFF ]\n`;
+    doc += `   Pursuant to Code of Criminal Procedure, charges are hereby submitted for judicial prosecution.\n`;
+    doc += `   Investigating Officer Sign-off : [ SIGNED & VERIFIED - ${leadOfficerName} ]\n`;
+    doc += `   Superintendent Approval Status : ${target.status === 'CLOSED' || target.status === 'READY_FOR_CHARGESHEET' ? 'APPROVED BY SUPERINTENDENT' : 'PENDING SP SIGN-OFF'}\n`;
+
+  } else if (reportType === 'Investigation Summary') {
+    doc += `[ 1. CASE OVERVIEW & INCIDENT DETAILS ]\n`;
+    doc += `   Title            : ${target.title}\n`;
+    doc += `   Crime Category   : ${target.crimeType || 'Unclassified'}\n`;
+    doc += `   Priority Level   : ${target.priority || 'Medium'}\n`;
+    doc += `   Incident Location: ${target.location || 'N/A'}\n`;
+    doc += `   Registration Date: ${target.createdAt ? new Date(target.createdAt).toLocaleDateString() : 'N/A'}\n`;
+
+    doc += `\n[ 2. FIRST INFORMATION REPORT (FIR) DATA ]\n`;
+    doc += `   FIR ID       : ${linkedFir.id || 'N/A'}\n`;
+    doc += `   Reporter Name: ${linkedFir.reporter || 'N/A'}\n`;
+    doc += `   Description  : ${linkedFir.description || 'N/A'}\n`;
+
+    doc += `\n[ 3. KEY WITNESS STATEMENTS ]\n`;
+    if (witnesses.length === 0) {
+      doc += `   No witness statements recorded.\n`;
+    } else {
+      witnesses.forEach(w => {
+        doc += `   - ${w.witness || w.name}: "${w.statement || 'No statement.'}"\n`;
+      });
+    }
+
+    doc += `\n[ 4. INVESTIGATION PROGRESS & MILESTONES ]\n`;
+    const completedCount = timelineSteps.filter(s => s.completed).length;
+    doc += `   Completed Steps: ${completedCount} of ${timelineSteps.length} milestones.\n`;
+    doc += `   Evidence Logged: ${evidenceItems.length} physical/digital artifacts.\n`;
+
+  } else if (reportType === 'Evidence Ledger') {
+    doc += `[ DIGITAL EVIDENCE & CHAIN OF CUSTODY VAULT LEDGER ]\n\n`;
+    doc += `Total Registered Items: ${evidenceItems.length}\n\n`;
+
+    if (evidenceItems.length === 0) {
+      doc += `No evidence items logged for this case.\n`;
+    } else {
+      evidenceItems.forEach((e, idx) => {
+        const dateStr = e.createdAt ? new Date(e.createdAt).toLocaleString() : 'N/A';
+        doc += `ITEM #${idx + 1}:\n`;
+        doc += `   Evidence ID      : ${e.id}\n`;
+        doc += `   Name / Label     : ${e.name}\n`;
+        doc += `   Category         : ${e.category || 'Other'}\n`;
+        doc += `   Uploaded By      : ${e.collectedBy || e.uploadedByOfficerId || 'Officer'}\n`;
+        doc += `   Upload Date      : ${dateStr}\n`;
+        doc += `   Integrity Status : ${e.verificationStatus || 'Verified'}\n`;
+        doc += `   Chain Status     : ${e.chainOfCustodyStatus || 'In Vault'}\n`;
+        doc += `   Cloudinary Link  : ${e.cloudinaryUrl || 'Stored Locally'}\n`;
+
+        if (e.transfers && e.transfers.length > 0) {
+          doc += `   Transfer History :\n`;
+          e.transfers.forEach(t => {
+            doc += `     * From: ${t.fromOfficer} -> To: ${t.toOfficer} (${t.purpose}) on ${new Date(t.timestamp).toLocaleString()}\n`;
+          });
+        }
+        doc += `----------------------------------------------------------------------------------------\n`;
+      });
+    }
+
+  } else if (reportType === 'Timeline Report') {
+    doc += `[ CHRONOLOGICAL INVESTIGATION AUDIT SEQUENCE ]\n\n`;
+    doc += `Total Sequence Steps: ${timelineSteps.length}\n\n`;
+
+    if (timelineSteps.length === 0) {
+      doc += `No timeline events recorded.\n`;
+    } else {
+      timelineSteps.forEach((s, idx) => {
+        const sDate = s.date ? new Date(s.date).toLocaleString() : (s.createdAt ? new Date(s.createdAt).toLocaleString() : 'N/A');
+        doc += `STEP #${idx + 1} [ ${s.completed ? 'COMPLETED' : 'PENDING'} ] - ${sDate}\n`;
+        doc += `   Event Title: ${s.step}\n`;
+        doc += `   Details    : ${s.details || 'No additional details logged.'}\n`;
+        doc += `----------------------------------------------------------------------------------------\n`;
       });
     }
   }
-  
-  preview.textContent = docContent;
-  triggerToast(`Generated ${reportType} findings. Ready for export.`, "success");
+
+  doc += `\n========================================================================================\n`;
+  doc += `                     END OF CIB OFFICIAL RECORD - AUTHENTICATED DB DATA                 \n`;
+  doc += `========================================================================================\n`;
+
+  window.currentGeneratedReport = {
+    reportType,
+    caseId: target.id,
+    caseTitle: target.title,
+    docText: doc
+  };
+
+  preview.textContent = doc;
+  triggerToast(`Generated ${reportType} from PostgreSQL database.`, "success");
 }
 
-function exportPDFMock() {
-  const docText = document.getElementById('report-doc-preview').textContent;
-  if (docText.trim().startsWith('Select a case')) {
-    triggerToast("Please generate a report document first.", "danger");
+function exportPDFDocument() {
+  if (!window.currentGeneratedReport || !window.currentGeneratedReport.docText) {
+    triggerToast("Please generate a report first before exporting PDF.", "warning");
     return;
   }
-  
-  const blob = new Blob([docText], { type: 'text/plain' });
+
+  const { reportType, caseId, docText } = window.currentGeneratedReport;
+  const fileName = `CIB_${reportType.replace(/\s+/g, '_')}_${caseId}.pdf`;
+
+  if (window.jspdf && window.jspdf.jsPDF) {
+    try {
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ unit: 'pt', format: 'letter' });
+      
+      pdf.setFont('courier', 'normal');
+      pdf.setFontSize(9);
+
+      const margins = 40;
+      const pageHeight = pdf.internal.pageSize.height - 80;
+      const lines = pdf.splitTextToSize(docText, 530);
+      let cursorY = 40;
+
+      lines.forEach((line) => {
+        if (cursorY > pageHeight) {
+          pdf.addPage();
+          cursorY = 40;
+        }
+        pdf.text(line, margins, cursorY);
+        cursorY += 12;
+      });
+
+      pdf.save(fileName);
+      triggerToast(`Legally signed vector PDF downloaded: ${fileName}`, "success");
+      return;
+    } catch (err) {
+      console.error("jsPDF generation error, falling back to document download:", err);
+    }
+  }
+
+  // Fallback direct download
+  const blob = new Blob([docText], { type: 'application/pdf' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `CIB-Report-${new Date().toISOString().split('T')[0]}.pdf`;
+  a.download = fileName;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
-  
-  triggerToast("Legally signed and exported PDF file downloaded.", "success");
+
+  triggerToast(`Report file downloaded: ${fileName}`, "success");
 }
 
 // Investigation Room Logic
@@ -4471,5 +4651,6 @@ window.forwardCaseToSuperintendent = forwardCaseToSuperintendent;
 window.spApproveCase = spApproveCase;
 window.spRequestChanges = spRequestChanges;
 window.spRejectCase = spRejectCase;
+window.exportPDFDocument = exportPDFDocument;
 
 

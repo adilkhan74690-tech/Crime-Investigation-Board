@@ -15,6 +15,8 @@
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <!-- ApexCharts Library -->
   <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+  <!-- jsPDF Library for Vector PDF Generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
   <div id="toast-container" class="toast-container"></div>
@@ -737,20 +739,21 @@
                 <!-- Loaded dynamically -->
               </select>
             </div>
-            <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; flex-direction: column; gap: 12px;">
               <button class="btn-primary" onclick="generateReportType('Chargesheet')"><i class="ri-file-shield-2-line"></i> Generate Formal Chargesheet</button>
-              <button class="btn-primary" onclick="generateReportType('Final Summary')"><i class="ri-file-list-3-line"></i> Generate Final Board Report</button>
-              <button class="btn-primary" onclick="generateReportType('Evidence Ledger')"><i class="ri-file-history-line"></i> Generate Evidence Ledger Summary</button>
+              <button class="btn-primary" onclick="generateReportType('Investigation Summary')"><i class="ri-file-list-3-line"></i> Generate Investigation Summary</button>
+              <button class="btn-primary" onclick="generateReportType('Evidence Ledger')"><i class="ri-file-history-line"></i> Generate Evidence Ledger Report</button>
+              <button class="btn-primary" onclick="generateReportType('Timeline Report')"><i class="ri-time-line"></i> Generate Timeline Audit Report</button>
             </div>
           </div>
 
           <div class="chart-card">
             <h3 style="font-size: 16px; margin-bottom: 16px;">Report Live Document Preview</h3>
-            <div id="report-doc-preview" style="background-color: var(--card-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 24px; min-height: 240px; font-family: monospace; font-size: 12px; line-height: 1.6; color: var(--text-secondary);">
-              Select a case and choose a report format to display details here.
+            <div id="report-doc-preview" style="background-color: var(--card-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 24px; min-height: 280px; max-height: 450px; overflow-y: auto; font-family: monospace; font-size: 12px; line-height: 1.6; color: var(--text-secondary); white-space: pre-wrap;">
+Select a target investigation case and click a report type above to generate real PostgreSQL findings.
             </div>
             <div style="display: flex; justify-content: flex-end; margin-top: 16px;">
-              <button class="btn-primary" style="width: auto;" onclick="exportPDFMock()"><i class="ri-file-pdf-line"></i> Export PDF Document</button>
+              <button class="btn-primary" style="width: auto; background-color: var(--success-color);" onclick="exportPDFDocument()"><i class="ri-file-pdf-line"></i> Export PDF Document</button>
             </div>
           </div>
         </div>

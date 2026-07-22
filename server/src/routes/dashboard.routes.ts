@@ -295,4 +295,37 @@ router.delete('/notifications/:id', authenticateToken, asyncHandler(async (req: 
   res.json(formatResponse({ success: true }, 'Notification deleted successfully.'));
 }));
 
+// Endpoint: Fetch complete real PostgreSQL payload for Case Reports
+router.get('/reports/case/:caseId', authenticateToken, asyncHandler(async (req: any, res: any) => {
+  const { caseId } = req.params;
+
+  let item = await prisma.case.findFirst({
+    where: {
+      OR: [
+        { id: caseId },
+        { firId: caseId },
+        { fir: { id: caseId } }
+      ]
+    },
+    include: {
+      assignedOfficer: { include: { user: true } },
+      fir: true,
+      witnesses: true,
+      timeline: { orderBy: { createdAt: 'desc' } },
+      evidence: { include: { transfers: true } },
+      forensics: true,
+      victims: true,
+      suspects: true,
+      caseNotes: { orderBy: { createdAt: 'desc' } },
+      assignmentHistory: true
+    }
+  });
+
+  if (!item) {
+    throw new Error(`Case record ${caseId} not found in PostgreSQL database.`);
+  }
+
+  res.json(formatResponse(item, 'Full PostgreSQL case report payload loaded.'));
+}));
+
 export default router;
