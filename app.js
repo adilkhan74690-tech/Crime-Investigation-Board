@@ -1098,12 +1098,13 @@ function renderCasesTable(filteredList = null) {
 
   const isClosedStatus = (s) => s === 'CLOSED' || s === 'Closed' || s === 'Solved' || s === 'FORENSIC_APPROVED';
   
-  // Active tables must only contain in-progress cases
-  const activeItems = (filteredList || items).filter(i => !isClosedStatus(i.status));
-  const total = activeItems.length;
+  // If filteredList is provided (e.g. status filter or search), use it directly.
+  // Otherwise, default active tables show in-progress cases only.
+  const displayItems = filteredList ? filteredList : items.filter(i => !isClosedStatus(i.status));
+  const total = displayItems.length;
   const startIndex = (casesPage - 1) * casesPageSize;
   const endIndex = startIndex + casesPageSize;
-  const paginated = activeItems.slice(startIndex, endIndex);
+  const paginated = displayItems.slice(startIndex, endIndex);
 
   // Update ranges
   const rangeEl = document.getElementById('cases-pagination-range');
@@ -1196,16 +1197,20 @@ function renderCasesTable(filteredList = null) {
 }
 
 function filterCases() {
-  const priorityFilter = document.getElementById('filter-priority').value;
-  const statusFilter = document.getElementById('filter-status').value;
+  const priorityFilter = document.getElementById('filter-priority') ? document.getElementById('filter-priority').value : 'All';
+  const statusFilter = document.getElementById('filter-status') ? document.getElementById('filter-status').value : 'All';
   
-  let result = window.CIB_DB.cases;
+  let result = window.CIB_DB.cases || [];
   
   if (priorityFilter !== 'All') {
     result = result.filter(c => c.priority === priorityFilter);
   }
   if (statusFilter !== 'All') {
-    result = result.filter(c => c.status === statusFilter);
+    if (statusFilter === 'CLOSED' || statusFilter === 'Solved') {
+      result = result.filter(c => c.status === 'CLOSED' || c.status === 'Closed' || c.status === 'Solved' || c.status === 'FORENSIC_APPROVED');
+    } else {
+      result = result.filter(c => c.status === statusFilter);
+    }
   }
   
   renderCasesTable(result);
