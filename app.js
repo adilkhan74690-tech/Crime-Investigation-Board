@@ -1178,27 +1178,23 @@ function openCaseDetail(caseId) {
   const timelineBox = document.getElementById('detail-timeline');
   if (timelineBox) {
     timelineBox.innerHTML = '';
-    const stepsList = target.timeline || [];
-    if (stepsList.length === 0) {
-      timelineBox.innerHTML = '<span style="color:var(--text-secondary); font-size:13px;">No timeline steps logged yet.</span>';
-    } else {
-      stepsList.forEach(step => {
-        const stepEl = document.createElement('div');
-        stepEl.className = `timeline-step ${step.completed ? 'completed' : ''}`;
-        const stepDate = step.date ? new Date(step.date).toLocaleString() : (step.createdAt ? new Date(step.createdAt).toLocaleString() : 'N/A');
-        stepEl.innerHTML = `
-          <div class="timeline-dot"></div>
-          <div class="timeline-content">
-            <div class="timeline-title">
-              <span>${step.step}</span>
-              <span class="timeline-date">${stepDate}</span>
-            </div>
-            ${step.details ? `<div class="timeline-desc">${step.details}</div>` : ''}
+    const stepsList = buildDynamicTimeline(target);
+    stepsList.forEach(step => {
+      const stepEl = document.createElement('div');
+      stepEl.className = `timeline-step ${step.completed ? 'completed' : ''}`;
+      const stepDate = step.date ? new Date(step.date).toLocaleString() : 'Pending';
+      stepEl.innerHTML = `
+        <div class="timeline-dot"></div>
+        <div class="timeline-content">
+          <div class="timeline-title">
+            <span>${step.step}</span>
+            <span class="timeline-date">${stepDate}</span>
           </div>
-        `;
-        timelineBox.appendChild(stepEl);
-      });
-    }
+          ${step.details ? `<div class="timeline-desc">${step.details}</div>` : ''}
+        </div>
+      `;
+      timelineBox.appendChild(stepEl);
+    });
   }
 
   // 3. Evidence Tab Content
@@ -1625,25 +1621,147 @@ function renderTimelineView() {
   });
 }
 
+function buildDynamicTimeline(target) {
+  if (!target) return [];
+
+  const existingTimeline = target.timeline || [];
+
+  // 9 Canonical Lifecycle Stage Steps
+  const stages = [
+    {
+      step: 'FIR Registered',
+      key: 'fir',
+      defaultCompleted: true,
+      defaultDetails: `FIR reference ${target.firId || target.id} registered in database.`,
+      date: target.fir?.createdAt || target.createdAt || target.createdDate
+    },
+    {
+      step: 'Case Created',
+      key: 'case',
+      defaultCompleted: true,
+      defaultDetails: `Investigation Case ${target.id} officially created from FIR.`,
+      date: target.createdAt || target.createdDate
+    },
+    {
+      step: 'Assigned',
+      key: 'assigned',
+      defaultCompleted: !!(target.officerId || target.assignedOfficer),
+      defaultDetails: target.assignedOfficer?.user?.name ? `Assigned to ${target.assignedOfficer.rank || 'Officer'} ${target.assignedOfficer.user.name}.` : `Assigned to Officer ID: ${target.officerId || 'Lead Officer'}.`,
+      date: target.createdAt
+    },
+    {
+      step: 'Evidence Uploaded',
+      key: 'evidence',
+      defaultCompleted: !!(target.evidence && target.evidence.length > 0),
+      defaultDetails: (target.evidence && target.evidence.length > 0) ? `${target.evidence.length} evidence items logged and verified in vault.` : 'Pending evidence submission.',
+      date: (target.evidence && target.evidence.length > 0) ? target.evidence[0].createdAt : null
+    },
+    {
+      step: 'Sent To Forensics',
+      key: 'sent_forensics',
+      defaultCompleted: !!((target.forensics && target.forensics.length > 0) || target.status === 'UNDER_FORENSIC_REVIEW' || target.status === 'FORENSIC_APPROVED'),
+      defaultDetails: 'Evidence and case file dispatched to Forensic Analysis Laboratory.',
+      date: (target.forensics && target.forensics.length > 0) ? target.forensics[0].createdAt : null
+    },
+    {
+      step: 'Report Uploaded',
+      key: 'report_uploaded',
+      defaultCompleted: !!(target.forensics && target.forensics.some(f => f.reportFileUrl || f.status)),
+      defaultDetails: (target.forensics && target.forensics.length > 0 && target.forensics[0].reportFileUrl) ? `Forensic Report "${target.forensics[0].reportTitle || target.forensics[0].type}" uploaded.` : 'Forensic examination report uploaded by specialist.',
+      date: (target.forensics && target.forensics.length > 0) ? target.forensics[0].createdAt : null
+    },
+    {
+      step: 'Inspector Review',
+      key: 'inspector_review',
+      defaultCompleted: !!(target.forensics && target.forensics.some(f => f.status === 'Approved')),
+      defaultDetails: 'Forensic findings and evidence integrity reviewed & accepted by Inspector.',
+      date: null
+    },
+    {
+      step: 'SP Approval',
+      key: 'sp_approval',
+      defaultCompleted: ['READY_FOR_CHARGESHEET', 'CLOSED', 'Solved', 'FORENSIC_APPROVED'].includes(target.status),
+      defaultDetails: ['READY_FOR_CHARGESHEET', 'CLOSED', 'Solved', 'FORENSIC_APPROVED'].includes(target.status) ? `Chargesheet & investigation file approved by Superintendent.` : `Awaiting Superintendent review and chargesheet approval.`,
+      date: null
+    },
+    {
+      step: 'Closed',
+      key: 'closed',
+      defaultCompleted: ['CLOSED', 'Solved'].includes(target.status),
+      defaultDetails: ['CLOSED', 'Solved'].includes(target.status) ? `Investigation case resolved and officially closed.` : `Case active under investigation.`,
+      date: null
+    }
+  ];
+
+  // Merge matching existing PostgreSQL timeline entries for exact timestamps/details
+  const finalSequence = stages.map(stage => {
+    const match = existingTimeline.find(t => 
+      t.step && (
+        t.step.toLowerCase().trim() === stage.step.toLowerCase().trim() ||
+        (stage.step === 'FIR Registered' && t.step.includes('FIR')) ||
+        (stage.step === 'Case Created' && (t.step.includes('Case File Opened') || t.step.includes('Case Created'))) ||
+        (stage.step === 'Assigned' && (t.step.includes('Assigned') || t.step.includes('Assignment')))
+      )
+    );
+    if (match) {
+      return {
+        step: stage.step,
+        completed: match.completed !== undefined ? match.completed : stage.defaultCompleted,
+        details: match.details || stage.defaultDetails,
+        date: match.date || match.createdAt || stage.date
+      };
+    }
+    return {
+      step: stage.step,
+      completed: stage.defaultCompleted,
+      details: stage.defaultDetails,
+      date: stage.date
+    };
+  });
+
+  // Also append custom logged events (Notes added, transfers, review notes)
+  existingTimeline.forEach(entry => {
+    const isCanonical = stages.some(s => 
+      s.step.toLowerCase().trim() === (entry.step || '').toLowerCase().trim() ||
+      (s.step === 'FIR Registered' && entry.step?.includes('FIR')) ||
+      (s.step === 'Case Created' && (entry.step?.includes('Case File Opened') || entry.step?.includes('Case Created'))) ||
+      (s.step === 'Assigned' && (entry.step?.includes('Assigned') || entry.step?.includes('Assignment')))
+    );
+    if (!isCanonical) {
+      finalSequence.push({
+        step: entry.step,
+        completed: entry.completed !== undefined ? entry.completed : true,
+        details: entry.details || '',
+        date: entry.date || entry.createdAt
+      });
+    }
+  });
+
+  return finalSequence;
+}
+
 function loadTimelineForCase(caseId) {
-  const target = window.CIB_DB.cases.find(c => c.id === caseId);
+  const target = (window.CIB_DB.cases || []).find(c => c.id === caseId || c.firId === caseId);
   if (!target) return;
   
-  document.getElementById('timeline-focused-case-title').textContent = `${target.id} Timeline Flow`;
+  const caseTitleEl = document.getElementById('timeline-focused-case-title');
+  if (caseTitleEl) caseTitleEl.textContent = `${target.id} Timeline Flow`;
   
   const container = document.getElementById('master-timeline-workflow');
+  if (!container) return;
   container.innerHTML = '';
-  const stepsList = target.timeline || [];
+  const stepsList = buildDynamicTimeline(target);
   stepsList.forEach(step => {
     const stepEl = document.createElement('div');
     stepEl.className = `timeline-step ${step.completed ? 'completed' : ''}`;
     stepEl.style.marginBottom = '24px';
+    const dateStr = step.date ? new Date(step.date).toLocaleString() : 'Pending Stage';
     stepEl.innerHTML = `
       <div class="timeline-dot" style="border-width: 3px; width: 16px; height: 16px; left: -29px; top: 8px;"></div>
       <div class="timeline-content" style="background-color: var(--surface-color); border: 1px solid var(--border-color); padding: 18px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.15);">
         <div class="timeline-title" style="font-size: 14px; font-weight: 600; color: #FFFFFF; display: flex; justify-content: space-between; align-items: center;">
           <span>${step.step}</span>
-          <span class="timeline-date" style="font-family: monospace; font-size: 11px; color: var(--text-secondary);">${step.date}</span>
+          <span class="timeline-date" style="font-family: monospace; font-size: 11px; color: var(--text-secondary);">${dateStr}</span>
         </div>
         ${step.details ? `<div class="timeline-desc" style="font-size: 12px; color: var(--text-secondary); margin-top: 8px; line-height: 1.5;">${step.details}</div>` : ''}
       </div>

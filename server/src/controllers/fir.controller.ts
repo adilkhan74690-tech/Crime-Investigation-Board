@@ -96,6 +96,15 @@ export class FirController {
       }
     });
 
+    await prisma.timeline.create({
+      data: {
+        caseId: fir.id,
+        step: 'FIR Registered',
+        completed: true,
+        details: `First Information Report ${fir.id} ("${title}") registered by ${(req as any).user?.name || 'Officer'}.`
+      }
+    }).catch(console.error);
+
     await logAudit(
       req,
       creatorOfficerId,
