@@ -487,11 +487,12 @@ button, input, select, textarea {
   height: 100vh;
   width: 100vw;
   background-color: var(--bg-color);
+  overflow: hidden;
 }
 
 /* Sidebar styling */
 .sidebar {
-  width: 260px;
+  width: 280px;
   background-color: var(--surface-color);
   border-right: 1px solid var(--border-color);
   display: flex;
@@ -519,9 +520,10 @@ button, input, select, textarea {
 
 .sidebar-header {
   height: 64px;
+  min-height: 64px;
   display: flex;
   align-items: center;
-  padding: 0 calc(var(--grid-unit) * 2.5);
+  padding: 0 20px;
   border-bottom: 1px solid var(--border-color);
   justify-content: space-between;
 }
@@ -529,7 +531,7 @@ button, input, select, textarea {
 .brand {
   display: flex;
   align-items: center;
-  gap: calc(var(--grid-unit) * 1.5);
+  gap: 12px;
   text-decoration: none;
 }
 
@@ -550,7 +552,7 @@ button, input, select, textarea {
 
 .brand-name {
   font-weight: 700;
-  font-size: 16px;
+  font-size: 15px;
   color: var(--text-primary);
   white-space: nowrap;
   letter-spacing: -0.01em;
@@ -565,10 +567,11 @@ button, input, select, textarea {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 12px;
+  padding: 8px;
   border-radius: var(--radius-sm);
   transition: var(--transition-smooth);
-  min-height: 44px;
+  height: 36px;
+  width: 36px;
 }
 
 .collapse-btn:hover {
@@ -577,10 +580,10 @@ button, input, select, textarea {
 }
 
 .sidebar-nav {
-  padding: calc(var(--grid-unit) * 2) calc(var(--grid-unit) * 1.5);
+  padding: 16px 12px;
   display: flex;
   flex-direction: column;
-  gap: calc(var(--grid-unit) * 0.5);
+  gap: 6px;
   flex-grow: 1;
   overflow-y: auto;
 }
@@ -588,21 +591,23 @@ button, input, select, textarea {
 .nav-item {
   display: flex;
   align-items: center;
-  padding: 12px;
+  padding: 0 14px;
   border-radius: var(--radius-md);
   color: var(--text-secondary);
   text-decoration: none;
   transition: var(--transition-smooth);
   font-size: 13px;
   font-weight: 500;
-  gap: calc(var(--grid-unit) * 2);
+  gap: 14px;
+  height: 44px;
   min-height: 44px;
 }
 
 .nav-item i {
-  font-size: 16px;
+  font-size: 17px;
   width: 20px;
   text-align: center;
+  flex-shrink: 0;
 }
 
 .nav-item:hover, .nav-item.active {
@@ -611,13 +616,14 @@ button, input, select, textarea {
 }
 
 .sidebar-footer {
-  padding: calc(var(--grid-unit) * 2);
+  padding: 16px;
   border-top: 1px solid var(--border-color);
 }
 
 .btn-lock {
   width: 100%;
-  padding: 12px;
+  padding: 0 14px;
+  height: 42px;
   background-color: rgba(239, 68, 68, 0.1);
   color: var(--danger-color);
   border: 1px solid rgba(239, 68, 68, 0.2);
@@ -629,7 +635,6 @@ button, input, select, textarea {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 44px;
   transition: var(--transition-smooth);
 }
 
@@ -645,42 +650,53 @@ button, input, select, textarea {
   display: flex;
   flex-direction: column;
   flex-grow: 1;
+  min-width: 0;
   overflow: hidden;
   height: 100vh;
 }
 
 .navbar {
   height: 64px;
+  min-height: 64px;
+  max-height: 64px;
   background-color: var(--surface-color);
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 calc(var(--grid-unit) * 4);
+  padding: 0 32px;
+  flex-shrink: 0;
 }
 
 .nav-left {
   display: flex;
   align-items: center;
-  gap: calc(var(--grid-unit) * 3);
+  gap: 24px;
   flex-grow: 1;
+  min-width: 0;
 }
 
 .search-box {
   position: relative;
-  max-width: 320px;
+  max-width: 400px;
   width: 100%;
 }
 
 .search-box input {
   width: 100%;
-  padding: 12px 12px 12px 38px;
+  padding: 0 14px 0 40px;
+  height: 40px;
   background-color: var(--card-color);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   color: var(--text-primary);
   font-size: 13px;
-  min-height: 44px;
+  transition: var(--transition-smooth);
+}
+
+.search-box input:focus {
+  outline: none;
+  border-color: var(--primary-color);
 }
 
 .search-box i {
@@ -689,26 +705,29 @@ button, input, select, textarea {
   top: 50%;
   transform: translateY(-50%);
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: 15px;
+  pointer-events: none;
 }
 
 .nav-right {
   display: flex;
   align-items: center;
-  gap: calc(var(--grid-unit) * 3);
+  gap: 20px;
+  flex-shrink: 0;
 }
 
 .system-status {
   display: flex;
   align-items: center;
-  gap: calc(var(--grid-unit) * 1);
+  gap: 8px;
   font-size: 11px;
   color: var(--text-secondary);
   border: 1px solid var(--border-color);
-  padding: 6px 12px;
+  padding: 6px 14px;
   border-radius: 20px;
   font-weight: 500;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 
 .status-dot {
@@ -716,36 +735,40 @@ button, input, select, textarea {
   height: 6px;
   border-radius: 50%;
   background-color: var(--success-color);
+  flex-shrink: 0;
 }
 
 .date-display {
   font-size: 13px;
   color: var(--text-secondary);
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .notification-bell {
   position: relative;
   cursor: pointer;
   color: var(--text-secondary);
-  font-size: 18px;
-  padding: 12px;
+  font-size: 19px;
+  padding: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: var(--radius-sm);
   transition: var(--transition-smooth);
 }
 
 .notification-bell:hover {
   color: var(--text-primary);
+  background-color: var(--card-color);
 }
 
 .bell-badge {
   position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 6px;
-  height: 6px;
+  top: 4px;
+  right: 4px;
+  width: 7px;
+  height: 7px;
   background-color: var(--danger-color);
   border-radius: 50%;
 }
@@ -753,16 +776,18 @@ button, input, select, textarea {
 .user-profile {
   display: flex;
   align-items: center;
-  gap: calc(var(--grid-unit) * 1.5);
+  gap: 12px;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .user-avatar {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   object-fit: cover;
   border: 1px solid var(--border-color);
+  flex-shrink: 0;
 }
 
 .user-info {
@@ -773,11 +798,13 @@ button, input, select, textarea {
 .user-name {
   font-size: 13px;
   font-weight: 600;
+  line-height: 1.2;
 }
 
 .user-rank {
   font-size: 11px;
   color: var(--text-secondary);
+  line-height: 1.2;
 }
 
 /* ---------------------------------------------------- */
@@ -785,9 +812,11 @@ button, input, select, textarea {
 /* ---------------------------------------------------- */
 .page-container {
   flex-grow: 1;
-  padding: calc(var(--grid-unit) * 4);
+  padding: 24px 32px 32px 32px;
   overflow-y: auto;
   display: none;
+  box-sizing: border-box;
+  width: 100%;
 }
 
 .page-container.active {
