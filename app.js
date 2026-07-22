@@ -171,9 +171,65 @@ function getAvatarSvg(name) {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
+// Loading State & Toast Suppression Controller
+let isInitializingSession = false;
+
+function showLoadingScreen(title, subtitle, progressPercent, statusMsg) {
+  isInitializingSession = true;
+  const screen = document.getElementById('app-loading-screen');
+  if (screen) screen.style.display = 'flex';
+  
+  const mainTitle = document.getElementById('loading-main-title');
+  const subTitle = document.getElementById('loading-sub-title');
+  const fill = document.getElementById('loading-progress-fill');
+  const statusText = document.getElementById('loading-status-text');
+  const errBox = document.getElementById('loading-error-box');
+  
+  if (mainTitle && title) mainTitle.textContent = title;
+  if (subTitle && subtitle) subTitle.textContent = subtitle;
+  if (fill && progressPercent !== undefined) fill.style.width = `${progressPercent}%`;
+  if (statusText && statusMsg) statusText.textContent = statusMsg;
+  if (errBox) errBox.style.display = 'none';
+}
+
+function hideLoadingScreen() {
+  const screen = document.getElementById('app-loading-screen');
+  if (screen) screen.style.display = 'none';
+  isInitializingSession = false;
+}
+
+function showLoadingError(errorTitle, errorMsg) {
+  isInitializingSession = true;
+  const screen = document.getElementById('app-loading-screen');
+  if (screen) screen.style.display = 'flex';
+  
+  const errBox = document.getElementById('loading-error-box');
+  const errTitle = document.getElementById('loading-error-title');
+  const errText = document.getElementById('loading-error-msg');
+  const fill = document.getElementById('loading-progress-fill');
+  const statusText = document.getElementById('loading-status-text');
+  
+  if (errTitle) errTitle.textContent = errorTitle || 'Initialization Failed';
+  if (errText) errText.textContent = errorMsg || 'Unable to sync database workspace payload. Please check connection.';
+  if (errBox) errBox.style.display = 'block';
+  if (fill) fill.style.width = '100%';
+  if (statusText) statusText.textContent = 'System initialization paused due to an error.';
+}
+
+async function retryDashboardInit() {
+  const errBox = document.getElementById('loading-error-box');
+  if (errBox) errBox.style.display = 'none';
+  await initDashboard();
+}
+
 // Toast System
 function triggerToast(message, type = 'success') {
+  if (isInitializingSession) {
+    // Suppress ALL toast notifications during post-login session initialization
+    return;
+  }
   const container = document.getElementById('toast-container');
+  if (!container) return;
   const toast = document.createElement('div');
   toast.className = `toast ${type === 'danger' ? 'toast-danger' : 'toast-success'}`;
   
@@ -245,8 +301,13 @@ async function handleLogin(event) {
       sessionStorage.setItem('cib_officer_id', officerId);
       sessionStorage.setItem('cib_officer_role', data.data.role);
       sessionStorage.setItem('cib_officer_name', data.data.name);
-      triggerToast(`Access Verified. Welcome ${data.data.name}. Redirecting...`, "success");
-      setTimeout(() => initDashboard(), 800);
+
+      // Immediately hide login form screen and show full-screen initialization loader
+      document.getElementById('auth-screen').style.display = 'none';
+      showLoadingScreen("Authenticating Officer...", "Preparing Secure Workspace...", 20, "Verifying security clearance & profile...");
+
+      // Execute workspace initialization
+      await initDashboard();
     } else {
       triggerToast(data.error || data.message || "Authentication verification failure.", "danger");
     }
@@ -302,19 +363,25 @@ async function handleLogout() {
 }
 
 async function initDashboard() {
-  const isInitialLoad = document.getElementById('app-workspace').style.display !== 'flex';
-  if (isInitialLoad) {
-    document.getElementById('auth-screen').style.display = 'flex';
-    document.getElementById('app-workspace').style.display = 'none';
+  const token = sessionStorage.getItem('cib_jwt_token');
+  const activeId = sessionStorage.getItem('cib_officer_id') || 'SA-001';
+
+  if (!token) {
+    handleLogout();
+    return;
   }
+
+  // Ensure loading overlay is displayed and workspace is hidden
+  showLoadingScreen("Authenticating Officer...", "Preparing Secure Workspace...", 30, "Synchronizing security clearance & database records...");
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app-workspace').style.display = 'none';
   
   renderSkeletons('cases-table-body', 5, 8);
   renderSkeletons('io-cases-table-body', 5, 8);
   
   // Sync state data from Express Postgres API endpoints
-  const token = sessionStorage.getItem('cib_jwt_token');
-  const activeId = sessionStorage.getItem('cib_officer_id') || 'SA-001';
   try {
+    showLoadingScreen("Authenticating Officer...", "Preparing Secure Workspace...", 50, "Fetching PostgreSQL cases, evidence & forensics payload...");
     const response = await fetch('/api/dashboard/dashboard-payload', {
       headers: { 'Authorization': `Bearer ${token}` }
     });
@@ -330,7 +397,6 @@ async function initDashboard() {
       window.CIB_DB.recentActivities = payloadResult.data.activities;
       window.CIB_DB.kpis = payloadResult.data.kpis || {};
       
-      // Update SI Dashboard counts directly from PostgreSQL payload
       const siPendingEl = document.getElementById('si-pending-firs-count');
       const siTotalCasesEl = document.getElementById('si-total-cases-count');
       if (siPendingEl) {
@@ -340,14 +406,11 @@ async function initDashboard() {
         siTotalCasesEl.textContent = payloadResult.data.kpis?.siTotalCases ?? 0;
       }
 
-      // Store notifications
       notifications = payloadResult.data.notifications || [];
       updateNotificationBell();
       
-      // Establish Socket connection
       connectSocket(activeId);
 
-      // Map tasks from remaining cases
       window.CIB_DB.tasks = payloadResult.data.cases
         .filter((c) => c.status === 'Active')
         .map((c, index) => ({
@@ -356,33 +419,27 @@ async function initDashboard() {
           priority: c.priority,
           done: false
         }));
+
       if (payloadResult.data.currentUser) {
         sessionStorage.setItem('cib_officer_role', payloadResult.data.currentUser.role);
         sessionStorage.setItem('cib_officer_name', payloadResult.data.currentUser.name);
       }
     } else {
-      throw new Error(payloadResult.error || 'Server responded with failure status.');
+      throw new Error(payloadResult.error || payloadResult.message || 'Server responded with failure status.');
     }
   } catch (err) {
-    console.error('Failed to sync payload with database. Using cache fallbacks.', err);
-    
-    const casesTbody = document.getElementById('cases-table-body');
-    if (casesTbody) {
-      casesTbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--danger-color); padding: 24px;">
-        Database connection failure. <button class="btn-primary" style="width: auto; padding: 6px 12px; font-size:12px; display: inline-flex; margin-left: 8px;" onclick="initDashboard()">Retry Sync</button>
-      </td></tr>`;
-    }
-    const ioCasesTbody = document.getElementById('io-cases-table-body');
-    if (ioCasesTbody) {
-      ioCasesTbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--danger-color); padding: 24px;">
-        Database connection failure. <button class="btn-primary" style="width: auto; padding: 6px 12px; font-size:12px; display: inline-flex; margin-left: 8px;" onclick="initDashboard()">Retry Sync</button>
-      </td></tr>`;
-    }
+    console.error('Initialization error during workspace sync:', err);
+    showLoadingError(
+      "Workspace Sync Failed",
+      "Unable to fetch database payload or resolve officer clearance. Please check server connection and retry."
+    );
+    return;
   }
+
+  showLoadingScreen("Preparing Secure Workspace...", "Building Authorized Modules...", 75, "Configuring dynamic navigation & charts...");
 
   const activeRole = sessionStorage.getItem('cib_officer_role') || 'SUPER_ADMIN';
   
-  // Find current officer avatar and name
   const officer = window.CIB_DB.officers.find(o => o.id === activeId);
   const name = officer ? officer.name : (sessionStorage.getItem('cib_officer_name') || 'Officer');
   const rank = officer ? officer.rank : (sessionStorage.getItem('cib_officer_role') || 'Special Agent');
@@ -392,16 +449,11 @@ async function initDashboard() {
   document.getElementById('navbar-username').textContent = name;
   document.getElementById('navbar-rank').textContent = `${rank} (${activeRole})`;
   
-  // Render Sidebar Links Dynamically based on Role Permissions
   renderDynamicSidebar(activeRole);
   
   const registerBtn = document.getElementById('btn-register-fir');
   if (registerBtn) {
-    if (activeRole === 'SUPER_ADMIN' || activeRole === 'SUB_INSPECTOR') {
-      registerBtn.style.display = 'flex';
-    } else {
-      registerBtn.style.display = 'none';
-    }
+    registerBtn.style.display = (activeRole === 'SUPER_ADMIN' || activeRole === 'SUB_INSPECTOR') ? 'flex' : 'none';
   }
   
   renderCounts();
@@ -418,6 +470,8 @@ async function initDashboard() {
   renderDepartmentsRegistry();
   renderSubInspectorRegistries();
   
+  showLoadingScreen("Preparing Secure Workspace...", "Finalizing Dashboard...", 95, "Opening authorized role dashboard...");
+
   // Determine target view safely based on activeRole permissions
   const allowedViews = ROLE_PERMISSIONS[activeRole] || ['sa-dashboard'];
   let targetView = currentActiveView;
@@ -425,16 +479,15 @@ async function initDashboard() {
     targetView = allowedViews[0];
   }
   
-  // Switch to the target view BEFORE displaying app workspace
   switchView(targetView);
   
-  // Now safely hide loading/auth screen and display the app workspace
-  if (isInitialLoad) {
+  // Complete loading transition
+  showLoadingScreen("Preparing Secure Workspace...", "Workspace Ready", 100, "Redirecting to primary dashboard...");
+  setTimeout(() => {
+    hideLoadingScreen();
     document.getElementById('auth-screen').style.display = 'none';
     document.getElementById('app-workspace').style.display = 'flex';
-  }
-  
-  triggerToast(`System Dashboard Synchronized as ${activeRole}.`, "success");
+  }, 250);
 }
 
 function renderDynamicSidebar(role) {

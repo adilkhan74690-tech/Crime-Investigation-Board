@@ -21,6 +21,44 @@
 <body>
   <div id="toast-container" class="toast-container"></div>
 
+  <!-- FULL-SCREEN POST-LOGIN INITIALIZATION LOADING SCREEN -->
+  <div id="app-loading-screen" class="full-loading-screen" style="display: none;">
+    <div class="loading-content-card">
+      <div class="cib-logo-glow" style="color: var(--primary-color); margin-bottom: 24px; display: flex; align-items: center; justify-content: center; width: 72px; height: 72px; background-color: rgba(37, 99, 235, 0.12); border-radius: 20px; border: 1px solid rgba(37, 99, 235, 0.25); box-shadow: 0 10px 30px -10px rgba(37, 99, 235, 0.5);">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: block;">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <polygon points="12 8 13.5 11.5 17 11.5 14 13.5 15.5 17 12 15 8.5 17 10 13.5 7 11.5 10.5 11.5" fill="currentColor"/>
+        </svg>
+      </div>
+
+      <h2 class="loading-title" id="loading-main-title">Authenticating Officer...</h2>
+      <p class="loading-subtitle" id="loading-sub-title">Preparing Secure Workspace...</p>
+
+      <!-- Progress Bar -->
+      <div class="loading-progress-bar-container">
+        <div class="loading-progress-bar-fill" id="loading-progress-fill"></div>
+      </div>
+
+      <!-- Status text below progress -->
+      <div class="loading-status-msg" id="loading-status-text">Synchronizing security clearance & database records...</div>
+
+      <!-- Single Error Dialog (Hidden by default) -->
+      <div id="loading-error-box" class="loading-error-dialog" style="display: none;">
+        <i class="ri-error-warning-line" style="font-size: 36px; color: var(--danger-color); margin-bottom: 12px; display: block;"></i>
+        <h3 style="font-size: 16px; font-weight: 700; color: #FFF; margin-bottom: 8px;" id="loading-error-title">Initialization Interrupted</h3>
+        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.5;" id="loading-error-msg">Connection to CIB database service encountered an error.</p>
+        <div style="display: flex; gap: 12px; justify-content: center;">
+          <button class="btn-primary" style="width: auto; padding: 10px 20px; font-size: 13px;" onclick="retryDashboardInit()">
+            <i class="ri-refresh-line"></i> Retry Initialization
+          </button>
+          <button class="btn-secondary" style="width: auto; padding: 10px 20px; font-size: 13px; background-color: rgba(239, 68, 68, 0.1); color: var(--danger-color); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: var(--radius-md); font-weight: 600; cursor: pointer;" onclick="handleLogout()">
+            <i class="ri-logout-box-r-line"></i> Logout
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- AUTHENTICATION LAYER -->
   <div id="auth-screen" class="auth-layout">
     <div class="auth-left-panel">
