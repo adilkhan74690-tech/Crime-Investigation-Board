@@ -118,7 +118,7 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
       throw new ApiError(403, 'Permission Denied: Forensic Officers cannot upload evidence. You can only upload forensic reports.');
     }
 
-    if (userRole === 'SUB_INSPECTOR' || userRole === 'INSPECTOR') {
+    if (userRole === 'SUB_INSPECTOR') {
       assignmentHistory = await prisma.caseAssignmentHistory.findFirst({
         where: {
           caseId: targetCaseId,

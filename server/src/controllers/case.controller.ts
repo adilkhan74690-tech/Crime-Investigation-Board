@@ -10,7 +10,7 @@ import { logAudit } from '../utils/auditLogger';
 export class CaseController {
   public static listCases = asyncHandler(async (req: AuthRequest, res: Response) => {
     let list;
-    if (req.user?.role === 'INSPECTOR' || req.user?.role === 'SUB_INSPECTOR') {
+    if (req.user?.role === 'SUB_INSPECTOR') {
       list = await prisma.case.findMany({
         where: {
           OR: [

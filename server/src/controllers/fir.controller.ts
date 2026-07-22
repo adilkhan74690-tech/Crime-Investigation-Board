@@ -137,16 +137,16 @@ export class FirController {
           in: ['Sent to Forensics', 'Under Forensic Review', 'Forensic Report Submitted']
         }
       };
-    } else if (userRole === 'INSPECTOR') {
+    } else if (userRole === 'SUB_INSPECTOR') {
       whereCondition = {
         status: {
-          in: ['Under Investigation', 'Forensic Report Submitted', 'Inspector Review', 'Pending Approval']
+          in: ['Under Investigation', 'Forensic Report Submitted', 'Sub Inspector Review', 'Pending Approval', 'Active', 'Registered', 'Assigned to SI']
         }
       };
     } else if (userRole === 'SUPERINTENDENT') {
       whereCondition = {
         status: {
-          in: ['Inspector Review', 'Superintendent Approval', 'Chargesheet Ready', 'Pending Approval', 'Solved', 'Closed']
+          in: ['Sub Inspector Review', 'Superintendent Approval', 'Chargesheet Ready', 'Pending Approval', 'Solved', 'Closed']
         }
       };
     }

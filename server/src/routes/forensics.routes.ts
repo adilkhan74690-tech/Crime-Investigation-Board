@@ -68,7 +68,7 @@ const handleForensicReportUpload = async (req: any, res: any) => {
         observations: finalObservations,
         reportFileUrl: reportFileUrl || existingReport.reportFileUrl,
         cloudinaryPublicId: cloudinaryPublicId || existingReport.cloudinaryPublicId,
-        approvalDate: 'Submitted for Inspector Review'
+        approvalDate: 'Submitted for Sub Inspector Review'
       }
     });
   } else {
@@ -85,12 +85,12 @@ const handleForensicReportUpload = async (req: any, res: any) => {
         observations: finalObservations,
         reportFileUrl,
         cloudinaryPublicId,
-        approvalDate: 'Submitted for Inspector Review'
+        approvalDate: 'Submitted for Sub Inspector Review'
       }
     });
   }
 
-  // Find linked Case & notify Inspector directly
+  // Find linked Case & notify Sub Inspector directly
   const targetCase = await prisma.case.findFirst({
     where: { OR: [{ id: caseId }, { firId: caseId }] }
   });

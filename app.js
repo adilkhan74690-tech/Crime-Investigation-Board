@@ -10,6 +10,14 @@ window.CIB_DB = {
   firs: []
 };
 window.selectedCase = null;
+let socket = null;
+let notifications = [];
+let notificationDropdownOpen = false;
+let notificationPage = 1;
+const notificationPageSize = 5;
+let isInitializingSession = false;
+let stage2FA = false;
+
 let currentActiveView = 'sa-dashboard';
 let sidebarCollapsed = false;
 let trendChart = null;
@@ -166,7 +174,6 @@ function getAvatarSvg(name) {
 }
 
 // Loading State & Toast Suppression Controller
-let isInitializingSession = false;
 
 function showLoadingScreen(title, subtitle, progressPercent, statusMsg) {
   isInitializingSession = true;
@@ -243,7 +250,6 @@ function triggerToast(message, type = 'success') {
 }
 
 // Authentication Logic
-let stage2FA = false;
 
 function setAuthLoading(isLoading) {
   const submitBtn = document.getElementById('auth-submit-btn');
@@ -1126,9 +1132,6 @@ function renderCasesTable(filteredList = null) {
             <button class="btn-primary" style="padding: 6px 10px; font-size: 11px; width: auto; background-color: var(--success-color);" onclick="showSubmitForensicModal('${item.linkedCaseId}', '${item.linkedCaseId}')"><i class="ri-file-upload-line"></i> Upload Report</button>
           </div>
         `;
-      } else if (activeRole === 'INSPECTOR') {
-        // INSPECTOR: Review SI Investigation, Approve / Reject / Return.
-        actionBtnHtml = `<button class="btn-primary" style="padding: 6px 12px; font-size: 11px; width: auto; background-color: var(--warning-color);" onclick="showReviewCaseModal('${item.linkedCaseId || item.id}')"><i class="ri-survey-line"></i> Review Case</button>`;
       } else if (activeRole === 'SUPERINTENDENT') {
         // SUPERINTENDENT: Final Approval, Generate Chargesheet, Close Case.
         actionBtnHtml = `<button class="btn-primary" style="padding: 6px 12px; font-size: 11px; width: auto; background-color: var(--success-color);" onclick="approveChargesheet('${item.linkedCaseId || item.id}')"><i class="ri-file-shield-line"></i> Approve & Close</button>`;
@@ -2805,8 +2808,8 @@ async function generateReportType(reportType) {
   }
 
   const generatedDate = new Date().toLocaleString();
-  const leadOfficerName = target.assignedOfficer?.user?.name || target.assignedOfficer?.name || target.officerId || 'Lead Detective';
-  const officerRank = target.assignedOfficer?.rank || 'Inspector';
+  const leadOfficerName = target.assignedOfficer?.user?.name || target.assignedOfficer?.name || target.officerId || 'Investigating Officer';
+  const officerRank = target.assignedOfficer?.rank || 'Sub Inspector';
   const linkedFir = target.fir || (window.CIB_DB.firs || []).find(f => f.id === target.firId || f.id === target.id) || {};
   const evidenceItems = target.evidence || (window.CIB_DB.evidence || []).filter(e => e.caseId === target.id);
   const timelineSteps = target.timeline || [];
@@ -4060,8 +4063,6 @@ window.handleAssignSiSubmit = handleAssignSiSubmit;
 window.startFirInvestigation = startFirInvestigation;
 window.deleteFirOrCase = deleteFirOrCase;
 window.executeDeleteRecord = executeDeleteRecord;
-window.showAssignInspectorModal = showAssignInspectorModal;
-window.handleAssignInspectorSubmit = handleAssignInspectorSubmit;
 window.showEvidenceUploadModal = showEvidenceUploadModal;
 window.handleEvidenceUploadSubmit = handleEvidenceUploadSubmit;
 window.handleEvidenceFileSelect = handleEvidenceFileSelect;
@@ -4247,10 +4248,6 @@ function wrapErrorBoundary(fn, containerId) {
 
 window.wrapErrorBoundary = wrapErrorBoundary;
 
-let socket = null;
-let notifications = [];
-let notificationDropdownOpen = false;
-
 function connectSocket(userId) {
   if (typeof io === 'undefined') return;
   if (socket) socket.disconnect();
@@ -4312,8 +4309,7 @@ async function syncNotificationsOnly() {
   }
 }
 
-let notificationPage = 1;
-const notificationPageSize = 5;
+
 
 function renderNotificationsDropdownContent(dropdown) {
   let list = dropdown.querySelector('.notification-list-container');
