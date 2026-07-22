@@ -791,19 +791,26 @@ function initApexCharts() {
 // Collapsible Sidebar logic
 function toggleSidebar() {
   const sidebar = document.getElementById('sidebar-menu');
+  const overlay = document.getElementById('sidebar-overlay');
   const icon = document.getElementById('collapse-icon');
-  sidebarCollapsed = !sidebarCollapsed;
   
-  // Check if viewport is mobile
-  if (window.innerWidth <= 767) {
-    sidebar.classList.toggle('active-drawer');
+  if (window.innerWidth <= 1023) {
+    const isDrawerActive = sidebar.classList.contains('active-drawer');
+    if (isDrawerActive) {
+      sidebar.classList.remove('active-drawer');
+      if (overlay) overlay.classList.remove('active');
+    } else {
+      sidebar.classList.add('active-drawer');
+      if (overlay) overlay.classList.add('active');
+    }
   } else {
+    sidebarCollapsed = !sidebarCollapsed;
     if (sidebarCollapsed) {
       sidebar.classList.add('collapsed');
-      icon.className = 'ri-menu-unfold-line';
+      if (icon) icon.className = 'ri-menu-unfold-line';
     } else {
       sidebar.classList.remove('collapsed');
-      icon.className = 'ri-menu-fold-line';
+      if (icon) icon.className = 'ri-menu-fold-line';
     }
   }
 }
@@ -829,9 +836,9 @@ function switchView(viewName) {
   
   // Close mobile drawer on link select
   const sidebar = document.getElementById('sidebar-menu');
-  if (sidebar) {
-    sidebar.classList.remove('active-drawer');
-  }
+  const overlay = document.getElementById('sidebar-overlay');
+  if (sidebar) sidebar.classList.remove('active-drawer');
+  if (overlay) overlay.classList.remove('active');
   
   // Highlight only the allowed menu links
   document.querySelectorAll('.nav-item').forEach(item => {
