@@ -456,19 +456,33 @@ async function initDashboard() {
     registerBtn.style.display = (activeRole === 'SUPER_ADMIN' || activeRole === 'SUB_INSPECTOR') ? 'flex' : 'none';
   }
   
+  // Role-aware module initialization
   renderCounts();
   renderTasks();
   renderActivities();
   renderCasesTable();
   renderEvidenceGrid();
-  renderForensicsLab();
-  renderOfficersList();
-  renderReportOptions();
   renderTimelineView();
-  initApexCharts();
+  renderReportOptions();
+
+  // Super Admin ONLY modules (prevents 403 /api/officers calls during non-admin logins)
+  if (activeRole === 'SUPER_ADMIN') {
+    renderOfficersList();
+    renderDepartmentsRegistry();
+  }
+
+  // Sub Inspector / Admin modules
+  if (activeRole === 'SUB_INSPECTOR' || activeRole === 'SUPER_ADMIN') {
+    renderSubInspectorRegistries();
+  }
+
+  // Forensic / Inspector / Admin modules
+  if (activeRole === 'FORENSIC_OFFICER' || activeRole === 'INSPECTOR' || activeRole === 'SUPER_ADMIN') {
+    renderForensicsLab();
+  }
+
   initRoomView();
-  renderDepartmentsRegistry();
-  renderSubInspectorRegistries();
+  initApexCharts();
   
   showLoadingScreen("Preparing Secure Workspace...", "Finalizing Dashboard...", 95, "Opening authorized role dashboard...");
 
@@ -535,6 +549,7 @@ function initApexCharts() {
   const casesToAnalyze = window.CIB_DB.cases || [];
   const officersToAnalyze = window.CIB_DB.officers || [];
   const evidenceToAnalyze = window.CIB_DB.evidence || [];
+  const hasCases = casesToAnalyze.length > 0;
 
   // Parse last 6 months dynamically
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
