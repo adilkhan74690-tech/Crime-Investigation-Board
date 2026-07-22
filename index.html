@@ -1411,7 +1411,39 @@ Select a target investigation case and click a report type above to generate rea
           <p style="color: var(--text-secondary); font-size: 14px; max-width: 380px; line-height: 1.6; margin-bottom: 24px;">Your current security clearance level is insufficient to view this classified module or command room.</p>
           <button class="btn-primary" style="width: auto; padding: 10px 20px;" onclick="switchView('dashboard')">Return to Dashboard</button>
         </div>
+      <!-- 11. 404 NOT FOUND VIEW -->
+      <main id="view-404" class="page-container">
+        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:480px; text-align:center;">
+          <div style="width: 80px; height: 80px; border-radius: 50%; background-color: rgba(37, 99, 235, 0.1); color: var(--primary-color); display: flex; align-items: center; justify-content: center; font-size: 36px; margin-bottom: 24px; border: 1px solid rgba(37, 99, 235, 0.25);">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polygon points="12 8 13.5 11.5 17 11.5 14 13.5 15.5 17 12 15 8.5 17 10 13.5 7 11.5 10.5 11.5" fill="currentColor"/></svg>
+          </div>
+          <h2 style="font-size: 24px; font-weight: 800; margin-bottom: 8px; color: #FFF;">Page Not Found (404)</h2>
+          <p style="color: var(--text-secondary); font-size: 14px; max-width: 420px; line-height: 1.6; margin-bottom: 24px;">The requested classified module, view, or record reference could not be located on the CIB secure portal.</p>
+          <button class="btn-primary" style="width: auto; padding: 10px 24px;" onclick="switchView('dashboard')"><i class="ri-arrow-left-line"></i> Return to Dashboard</button>
+        </div>
       </main>
+
+      <!-- 12. GENERIC ERROR VIEW -->
+      <main id="view-generic-error" class="page-container">
+        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:480px; text-align:center;">
+          <div style="width: 80px; height: 80px; border-radius: 50%; background-color: rgba(245, 158, 11, 0.1); color: var(--warning-color); display: flex; align-items: center; justify-content: center; font-size: 36px; margin-bottom: 24px; border: 1px solid rgba(245, 158, 11, 0.25);">
+            <i class="ri-error-warning-line"></i>
+          </div>
+          <h2 style="font-size: 24px; font-weight: 800; margin-bottom: 8px; color: #FFF;">System Exception Encountered</h2>
+          <p style="color: var(--text-secondary); font-size: 14px; max-width: 420px; line-height: 1.6; margin-bottom: 24px;">An unexpected runtime error occurred while executing your request. The security event has been logged for audit.</p>
+          <button class="btn-primary" style="width: auto; padding: 10px 24px;" onclick="initDashboard()"><i class="ri-refresh-line"></i> Reload Secure Workspace</button>
+        </div>
+      </main>
+
+      <!-- Minimal Enterprise Portal Footer -->
+      <footer style="padding: 12px 24px; border-top: 1px solid var(--border-color); background-color: var(--surface-color); font-size: 11px; color: var(--text-secondary); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-weight: 700; color: #FFF;">Crime Investigation Board (CIB)</span>
+          <span>• Version 1.0</span>
+          <span style="color: var(--success-color);">• Secure Internal Portal</span>
+        </div>
+        <div>© 2026 Law Enforcement Command Platform</div>
+      </footer>
 
       </div>
     </div>

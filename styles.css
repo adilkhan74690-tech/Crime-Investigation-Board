@@ -1348,41 +1348,67 @@ button, input, select, textarea {
 }
 
 /* ---------------------------------------------------- */
-/* Toast & Loader                                       */
+/* Toast & Loader System                                */
 /* ---------------------------------------------------- */
 .toast-container {
   position: fixed;
   bottom: 24px;
   right: 24px;
-  z-index: 1000;
+  z-index: 10000;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
+  pointer-events: none;
 }
 
 .toast {
+  pointer-events: auto;
   background-color: var(--surface-color);
   border-left: 4px solid var(--primary-color);
-  border-radius: var(--radius-sm);
-  padding: 16px;
-  width: 320px;
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  min-width: 280px;
+  max-width: 380px;
   color: var(--text-primary);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
-  animation: slideIn 0.3s ease-out;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6);
+  animation: toastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  border-top: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
 }
 
-.toast.toast-danger {
-  border-left-color: var(--danger-color);
-}
-
-.toast.toast-success {
+.toast-success {
   border-left-color: var(--success-color);
 }
+.toast-success i:first-child {
+  color: var(--success-color);
+}
 
-@keyframes slideIn {
+.toast-danger {
+  border-left-color: var(--danger-color);
+}
+.toast-danger i:first-child {
+  color: var(--danger-color);
+}
+
+.toast-warning {
+  border-left-color: var(--warning-color);
+}
+.toast-warning i:first-child {
+  color: var(--warning-color);
+}
+
+.toast-info {
+  border-left-color: var(--primary-color);
+}
+.toast-info i:first-child {
+  color: var(--primary-color);
+}
+
+@keyframes toastSlideIn {
   from {
     transform: translateX(100%);
     opacity: 0;
@@ -1825,10 +1851,10 @@ html {
   scroll-behavior: smooth;
 }
 
-/* Page Transition Animation - Mimicking Framer Motion fadeInUp */
+/* Page Transition Animation - Fast & Responsive Fade-In (<250ms) */
 .page-container.active {
   display: block;
-  animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: fadeInUp 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 @keyframes fadeInUp {

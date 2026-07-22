@@ -231,20 +231,33 @@ function triggerToast(message, type = 'success') {
   }
   const container = document.getElementById('toast-container');
   if (!container) return;
+
+  const normalizedType = (type === 'error' ? 'danger' : type);
   const toast = document.createElement('div');
-  toast.className = `toast ${type === 'danger' ? 'toast-danger' : 'toast-success'}`;
+  toast.className = `toast toast-${normalizedType}`;
+  
+  const iconMap = {
+    success: 'ri-checkbox-circle-line',
+    danger: 'ri-error-warning-line',
+    warning: 'ri-alert-line',
+    info: 'ri-information-line'
+  };
+
+  const iconClass = iconMap[normalizedType] || 'ri-information-line';
   
   toast.innerHTML = `
-    <div style="display:flex; align-items:center; gap:8px;">
-      <i class="${type === 'danger' ? 'ri-error-warning-line' : 'ri-checkbox-circle-line'}"></i>
-      <span style="font-size:13px; font-weight:500;">${message}</span>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <i class="${iconClass}" style="font-size: 18px;"></i>
+      <span style="font-size:13px; font-weight:500; color: #FFF;">${message}</span>
     </div>
-    <i class="ri-close-line" style="cursor:pointer;" onclick="this.parentElement.remove()"></i>
+    <i class="ri-close-line" style="cursor:pointer; font-size:16px; opacity:0.8;" onclick="this.parentElement.remove()"></i>
   `;
   
   container.appendChild(toast);
   setTimeout(() => {
     toast.style.opacity = '0';
+    toast.style.transform = 'translateY(10px)';
+    toast.style.transition = 'all 0.3s ease';
     setTimeout(() => toast.remove(), 300);
   }, 4000);
 }
