@@ -1863,6 +1863,58 @@
     </div>
   </div>
 
+  <!-- Evidence Details Modal -->
+  <div id="modal-evidence-detail" class="modal-overlay">
+    <div class="modal-container" style="max-width: 750px; width: 92%;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <i class="ri-bubble-chart-line" style="font-size: 22px; color: var(--primary-color);"></i>
+          <div>
+            <h3 class="modal-title" id="modal-ev-title">Evidence Artifact Details</h3>
+            <span style="font-size: 12px; color: var(--text-secondary); font-family: monospace;" id="modal-ev-id-badge">EVID-000</span>
+          </div>
+        </div>
+        <button class="modal-close-btn" onclick="hideModal('modal-evidence-detail')"><i class="ri-close-line"></i></button>
+      </div>
+      <div class="modal-body" style="display: flex; flex-direction: column; gap: 20px; max-height: 75vh; overflow-y: auto;">
+        
+        <!-- 1. File Preview Section -->
+        <div>
+          <label class="form-label" style="margin-bottom: 8px;">FILE PREVIEW</label>
+          <div id="modal-ev-preview" style="width: 100%; min-height: 220px; max-height: 350px; background-color: var(--surface-color); border: 1px solid var(--border-color); border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+            <!-- Preview image / icon rendered dynamically -->
+          </div>
+        </div>
+
+        <!-- 2. Direct Cloudinary Download Bar -->
+        <div id="modal-ev-download" style="background: rgba(37,99,235,0.08); border: 1px solid rgba(37,99,235,0.2); padding: 12px 16px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+          <!-- Download link rendered dynamically -->
+        </div>
+
+        <!-- 3. Complete Metadata Section -->
+        <div>
+          <label class="form-label" style="margin-bottom: 8px;">EVIDENCE METADATA</label>
+          <div id="modal-ev-metadata" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; background-color: var(--card-color); border: 1px solid var(--border-color); padding: 16px; border-radius: 8px;">
+            <!-- Metadata items rendered dynamically -->
+          </div>
+        </div>
+
+        <!-- 4. Chain of Custody Log -->
+        <div>
+          <label class="form-label" style="margin-bottom: 8px;">CHAIN OF CUSTODY TIMELINE</label>
+          <div id="modal-ev-custody" style="display: flex; flex-direction: column; gap: 8px;">
+            <!-- Custody steps rendered dynamically -->
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center;">
+        <div id="modal-ev-delete-container"></div>
+        <button type="button" class="btn-primary" style="width: auto; padding: 8px 18px;" onclick="hideModal('modal-evidence-detail')">Close</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Request Forensic Analysis Modal -->
   <div id="modal-request-forensic" class="modal-overlay">
     <div class="modal-container">

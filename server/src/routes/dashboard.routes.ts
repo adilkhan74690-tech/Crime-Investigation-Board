@@ -48,9 +48,22 @@ router.get('/dashboard-payload', authenticateToken, asyncHandler(async (req: any
   // Filter evidence by role
   let evidenceWhereClause: any = {};
   if (role === 'INSPECTOR' || role === 'SUB_INSPECTOR') {
-    evidenceWhereClause.case = { officerId };
+    evidenceWhereClause = {
+      OR: [
+        { case: { officerId: officerId } },
+        { case: { createdBy: officerId } },
+        { case: { assignmentHistory: { some: { officerId: officerId } } } },
+        { uploadedByOfficerId: officerId }
+      ]
+    };
   } else if (role === 'FORENSIC_OFFICER') {
-    evidenceWhereClause.collectedBy = officerId;
+    evidenceWhereClause = {
+      OR: [
+        { collectedBy: officerId },
+        { uploadedByOfficerId: officerId },
+        { case: { forensics: { some: { analyst: req.user.name } } } }
+      ]
+    };
   }
 
   const evidence = await prisma.evidence.findMany({

@@ -436,6 +436,7 @@ function renderDynamicSidebar(role) {
     if (role === 'SUPERINTENDENT') {
       if (view === 'sa-departments') displayLabel = 'Department Overview';
       if (view === 'sa-analytics') displayLabel = 'Performance Reports';
+      if (view === 'io-evidence') displayLabel = 'Evidence Review';
     }
     
     const link = document.createElement('a');
@@ -1182,17 +1183,33 @@ function openCaseDetail(caseId) {
 
   const evidenceList = document.getElementById('detail-evidence-list');
   evidenceList.innerHTML = '';
-  const relatedEv = window.CIB_DB.evidence.filter(e => e.caseId === caseId);
+  const relatedEv = (window.CIB_DB.evidence || []).filter(e => 
+    e.caseId === caseId || 
+    (selectedCase && (e.caseId === selectedCase.id || e.caseId === selectedCase.firId))
+  );
   if (relatedEv.length === 0) {
     evidenceList.innerHTML = '<span style="color:var(--text-secondary); font-size:13px;">No related evidence found.</span>';
   } else {
     relatedEv.forEach(ev => {
+      const dateStr = ev.createdAt ? new Date(ev.createdAt).toLocaleDateString() : 'N/A';
+      const uploaderStr = ev.collectedBy || ev.uploadedByOfficerId || 'Officer';
+      const isImg = ev.previewType === 'image' || (ev.cloudinaryUrl && ev.cloudinaryUrl.match(/\.(jpg|jpeg|png|webp|gif)/i));
+      
       evidenceList.innerHTML += `
-        <div class="evidence-card" onclick="switchView('io-evidence'); previewEvidence('${ev.id}')">
-          ${ev.previewType === 'image' ? `<div class="evidence-thumb-container"><img class="evidence-thumb" src="${ev.previewData}"></div>` : `<div class="evidence-thumb-container"><i class="ri-dna-line" style="font-size:24px;"></i></div>`}
-          <div class="evidence-card-info">
-            <div class="evidence-card-title">${ev.name}</div>
-            <span style="font-size:11px; color:var(--text-secondary);">${ev.id}</span>
+        <div class="evidence-card" onclick="previewEvidence('${ev.id}')" style="cursor:pointer; background-color: var(--card-color); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;">
+          ${isImg ? `<div class="evidence-thumb-container"><img class="evidence-thumb" src="${ev.cloudinaryUrl || ev.previewData}" style="width:100%; height:120px; object-fit:cover;"></div>` : `<div class="evidence-thumb-container" style="height:120px; display:flex; align-items:center; justify-content:center; background-color:rgba(37,99,235,0.08);"><i class="ri-file-shield-line" style="font-size:32px; color:var(--primary-color);"></i></div>`}
+          <div class="evidence-card-info" style="padding: 10px;">
+            <div class="evidence-card-title" style="font-weight: 600; font-size: 13px; color: #FFF; margin-bottom: 4px;">${ev.name}</div>
+            <div style="font-size: 11px; color: var(--text-secondary); font-family: monospace;">ID: <strong style="color: #FFF;">${ev.id}</strong></div>
+            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">Case: <strong style="color: var(--primary-color); font-family: monospace;">${ev.caseId}</strong></div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top: 6px;">
+              <span class="badge badge-warning" style="font-size: 9px; padding: 2px 6px;">${ev.category || 'Other'}</span>
+              <span class="badge ${ev.verificationStatus === 'Verified' || ev.verificationStatus === 'Verified Integrity' ? 'badge-status-solved' : 'priority-medium'}" style="font-size:9px; padding:2px 6px;">${ev.verificationStatus || 'Verified'}</span>
+            </div>
+            <div style="font-size: 10px; color: var(--text-secondary); margin-top: 6px; display: flex; justify-content: space-between;">
+              <span>By: ${uploaderStr}</span>
+              <span>${dateStr}</span>
+            </div>
           </div>
         </div>
       `;
@@ -1246,7 +1263,7 @@ function renderEvidenceGrid() {
           <td data-label="Chain of Custody"><span style="font-size: 12px; color: var(--text-secondary);">${ev.chainOfCustodyStatus || 'Secured in Vault'}</span></td>
           <td data-label="Status"><span class="badge ${ev.verificationStatus === 'Verified' || ev.verificationStatus === 'Verified Integrity' ? 'badge-status-solved' : 'priority-medium'}" style="font-size: 11px; padding: 2px 8px;">${ev.verificationStatus || 'Verified'}</span></td>
           <td data-label="Download">${downloadUrl !== '#' ? `<a href="${downloadUrl}" target="_blank" download class="btn-primary" style="padding: 4px 10px; font-size: 11px; width: auto; background-color: var(--primary-color); display: inline-flex; align-items: center; gap: 4px;"><i class="ri-download-line"></i> Download</a>` : '<span style="color:var(--text-secondary); font-size:11px;">N/A</span>'}</td>
-          <td data-label="View Details"><button class="btn-primary" style="padding: 4px 10px; font-size: 11px; width: auto; background-color: var(--border-light);" onclick="previewEvidence('${ev.id}'); document.getElementById('evidence-interactive-layout').style.display='grid'; document.getElementById('evidence-interactive-layout').scrollIntoView({behavior:'smooth'});"><i class="ri-eye-line"></i> Details</button></td>
+          <td data-label="View Details"><button class="btn-primary" style="padding: 4px 10px; font-size: 11px; width: auto; background-color: var(--border-light);" onclick="previewEvidence('${ev.id}')"><i class="ri-eye-line"></i> Details</button></td>
         `;
         tbody.appendChild(row);
       });
@@ -1254,9 +1271,15 @@ function renderEvidenceGrid() {
     return;
   }
 
-  // Non-Super Admin roles (SUB_INSPECTOR, INSPECTOR, FORENSIC_OFFICER, etc.)
-  if (titleEl) titleEl.textContent = 'Evidence Vault';
-  if (subtitleEl) subtitleEl.textContent = 'Secure digital tracking of forensic evidence artifacts & file chain-of-custody logs';
+  // Roles: INSPECTOR, SUB_INSPECTOR, SUPERINTENDENT, FORENSIC_OFFICER
+  if (titleEl) {
+    titleEl.textContent = activeRole === 'SUPERINTENDENT' ? 'Evidence Review' : 'Evidence Vault';
+  }
+  if (subtitleEl) {
+    subtitleEl.textContent = activeRole === 'SUPERINTENDENT' 
+      ? 'Review digital evidence artifacts & chain-of-custody logs across all cases' 
+      : 'Secure digital tracking of forensic evidence artifacts & file chain-of-custody logs';
+  }
   if (registryContainer) registryContainer.style.display = 'none';
   if (interactiveLayout) interactiveLayout.style.display = 'grid';
 
@@ -1264,22 +1287,7 @@ function renderEvidenceGrid() {
   if (!container) return;
   container.innerHTML = '';
 
-  // Filter evidence based on role clearance:
-  // FORENSIC_OFFICER: Can view evidence received for forensic analysis or assigned cases
-  // INSPECTOR: Can view evidence for assigned cases
-  // SUB_INSPECTOR: Can view evidence for assigned cases/FIRs
-  let filteredEvidences = window.CIB_DB.evidence;
-
-  if (activeRole === 'INSPECTOR' || activeRole === 'SUB_INSPECTOR') {
-    const myCaseIds = window.CIB_DB.cases.filter(c => c.officerId === currentOfficerId || c.assignedOfficerId === currentOfficerId).map(c => c.id);
-    const myFirIds = window.CIB_DB.firs.filter(f => f.officerId === currentOfficerId).map(f => f.id);
-    const allowedIds = new Set([...myCaseIds, ...myFirIds]);
-    filteredEvidences = window.CIB_DB.evidence.filter(ev => allowedIds.has(ev.caseId));
-  } else if (activeRole === 'FORENSIC_OFFICER') {
-    // FORENSIC_OFFICER sees evidence assigned or submitted for forensic analysis
-    const forensicCaseIds = window.CIB_DB.forensics.map(f => f.caseId);
-    filteredEvidences = window.CIB_DB.evidence.filter(ev => forensicCaseIds.includes(ev.caseId) || ev.uploadedByOfficerId === currentOfficerId);
-  }
+  const filteredEvidences = window.CIB_DB.evidence || [];
 
   if (filteredEvidences.length === 0) {
     container.innerHTML = `<div style="grid-column: 1/-1; padding: 24px; text-align: center; color: var(--text-secondary); background: var(--surface-color); border-radius: var(--radius-md); border: 1px dashed var(--border-color);">No evidence artifacts available under your security clearance.</div>`;
@@ -1289,22 +1297,49 @@ function renderEvidenceGrid() {
   filteredEvidences.forEach(ev => {
     const card = document.createElement('div');
     card.className = 'evidence-card';
+    card.style.cursor = 'pointer';
     card.onclick = () => previewEvidence(ev.id);
     
-    let thumbHTML = `<div class="evidence-thumb-container"><i class="ri-file-text-line" style="font-size:32px; color:var(--text-secondary);"></i></div>`;
-    if (ev.previewType === 'image') {
-      thumbHTML = `<div class="evidence-thumb-container"><img src="${ev.previewData}" class="evidence-thumb"></div>`;
-    } else if (ev.previewType === 'dna') {
-      thumbHTML = `<div class="evidence-thumb-container" style="background-color:rgba(16,185,129,0.05);"><i class="ri-dna-line" style="font-size:32px; color:var(--success-color);"></i></div>`;
+    const dateStr = ev.createdAt ? new Date(ev.createdAt).toLocaleDateString() : (ev.collectionDate ? new Date(ev.collectionDate).toLocaleDateString() : 'N/A');
+    const uploaderStr = ev.collectedBy || ev.uploadedByOfficerId || 'Unknown Officer';
+    const statusStr = ev.verificationStatus || ev.chainOfCustodyStatus || 'Verified';
+    const isImg = ev.previewType === 'image' || (ev.cloudinaryUrl && ev.cloudinaryUrl.match(/\.(jpg|jpeg|png|webp|gif)/i));
+
+    let thumbHTML = `<div class="evidence-thumb-container" style="height:130px; display:flex; align-items:center; justify-content:center; background-color:rgba(37,99,235,0.08);"><i class="ri-file-shield-line" style="font-size:40px; color:var(--primary-color);"></i></div>`;
+    if (isImg) {
+      thumbHTML = `<div class="evidence-thumb-container"><img src="${ev.cloudinaryUrl || ev.previewData}" class="evidence-thumb" style="width:100%; height:130px; object-fit:cover; border-radius:6px 6px 0 0;"></div>`;
+    } else if (ev.previewType === 'dna' || ev.category === 'Narcotics') {
+      thumbHTML = `<div class="evidence-thumb-container" style="background-color:rgba(16,185,129,0.08); height:130px; display:flex; align-items:center; justify-content:center;"><i class="ri-dna-line" style="font-size:40px; color:var(--success-color);"></i></div>`;
     }
     
     card.innerHTML = `
       ${thumbHTML}
-      <div class="evidence-card-info">
-        <div class="evidence-card-title">${ev.name}</div>
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
-          <span style="font-size:11px; color:var(--text-secondary);">${ev.id}</span>
-          <span class="badge ${ev.verificationStatus === 'Verified' || ev.verificationStatus === 'Verified Integrity' ? 'badge-status-solved' : 'priority-medium'}" style="font-size:9px; padding:2px 6px;">${ev.verificationStatus || 'Verified'}</span>
+      <div class="evidence-card-info" style="padding:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+          <div class="evidence-card-title" style="font-weight:600; font-size:13px; color:#FFF; line-height:1.3;">${ev.name}</div>
+          <span class="badge ${statusStr.includes('Verified') ? 'badge-status-solved' : 'priority-medium'}" style="font-size:9px; padding:2px 6px; white-space:nowrap;">${statusStr}</span>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:4px; margin-top:8px; font-size:11px; color:var(--text-secondary);">
+          <div style="display:flex; justify-content:space-between;">
+            <span>Evidence ID:</span>
+            <strong style="font-family:monospace; color:#FFF;">${ev.id}</strong>
+          </div>
+          <div style="display:flex; justify-content:space-between;">
+            <span>Case ID:</span>
+            <strong style="font-family:monospace; color:var(--primary-color);">${ev.caseId || 'N/A'}</strong>
+          </div>
+          <div style="display:flex; justify-content:space-between;">
+            <span>Category:</span>
+            <span class="badge badge-warning" style="font-size:9px; padding:1px 5px;">${ev.category || 'Other'}</span>
+          </div>
+          <div style="display:flex; justify-content:space-between;">
+            <span>Uploaded By:</span>
+            <span style="color:#FFF; font-weight:500;">${uploaderStr}</span>
+          </div>
+          <div style="display:flex; justify-content:space-between;">
+            <span>Uploaded Date:</span>
+            <span>${dateStr}</span>
+          </div>
         </div>
       </div>
     `;
@@ -1313,47 +1348,149 @@ function renderEvidenceGrid() {
 }
 
 function previewEvidence(evId) {
-  const ev = window.CIB_DB.evidence.find(e => e.id === evId);
+  const ev = (window.CIB_DB.evidence || []).find(e => e.id === evId);
   if (!ev) return;
   
+  const currentOfficerId = sessionStorage.getItem('cib_officer_id');
+  const userRole = sessionStorage.getItem('cib_officer_role');
+  const dateStr = ev.createdAt ? new Date(ev.createdAt).toLocaleString() : (ev.collectionDate ? new Date(ev.collectionDate).toLocaleString() : 'N/A');
+  const uploaderStr = ev.collectedBy || ev.uploadedByOfficerId || 'Unknown Officer';
+  const downloadUrl = ev.cloudinaryUrl || ev.previewData || '#';
+  const isImg = ev.previewType === 'image' || (ev.cloudinaryUrl && ev.cloudinaryUrl.match(/\.(jpg|jpeg|png|webp|gif)/i));
+
+  // 1. Populate Side Panel Preview Graphic
   const previewBox = document.getElementById('evidence-preview-graphic');
-  if (!previewBox) return;
-  previewBox.innerHTML = '';
-  
-  if (ev.previewType === 'image') {
-    previewBox.innerHTML = `
-      <img src="${ev.previewData}" alt="Evidence Graphic" style="width:100%; height:100%; object-fit:cover;">
-    `;
-  } else {
-    previewBox.innerHTML = `
-      <div style="font-family:monospace; font-size:11px; padding:16px; width:100%; height:100%; overflow-y:auto; color:var(--text-secondary); text-align:left; background-color: var(--card-color); border:1px solid var(--border-color); border-radius:6px;">
-        <div style="color:var(--success-color); font-weight:600; margin-bottom:8px;">// SECURID FORENSIC LINK DETECTED</div>
-        ${ev.previewData}
-      </div>
-    `;
-  }
-  
-  const timelineBox = document.getElementById('evidence-custody-chain');
-  timelineBox.innerHTML = '';
-  const custodyChain = ev.transfers || [];
-  
-  if (custodyChain.length === 0) {
-    timelineBox.innerHTML = '<span style="color:var(--text-secondary); font-size:13px; padding:12px;">No transfer logs recorded.</span>';
-  } else {
-    custodyChain.forEach(log => {
-      timelineBox.innerHTML += `
-        <div class="custody-log" style="background-color: var(--card-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-          <div>
-            <strong style="font-size: 13px; color: #FFFFFF; display: block; margin-bottom: 2px;">${log.action}</strong>
-            <span style="display:block; font-size:11px; color:var(--text-secondary);">Handler: <span style="color: var(--primary-color); font-weight: 500;">${log.handler}</span></span>
-          </div>
-          <span style="color:var(--text-secondary); font-size: 11px; font-family: monospace;">${log.date}</span>
+  if (previewBox) {
+    if (isImg) {
+      previewBox.innerHTML = `<img src="${downloadUrl}" alt="Evidence Graphic" style="width:100%; height:100%; object-fit:cover;">`;
+    } else {
+      previewBox.innerHTML = `
+        <div style="font-family:monospace; font-size:11px; padding:16px; width:100%; height:100%; overflow-y:auto; color:var(--text-secondary); text-align:left; background-color: var(--card-color); border:1px solid var(--border-color); border-radius:6px;">
+          <div style="color:var(--success-color); font-weight:600; margin-bottom:8px;">// SECURID FORENSIC LINK DETECTED</div>
+          <div>Artifact Name: ${ev.name}</div>
+          <div>Category: ${ev.category || 'Other'}</div>
+          <div>MIME Type: ${ev.mimeType || 'binary/stream'}</div>
+          <div>File Size: ${ev.fileSize ? (ev.fileSize / 1024).toFixed(1) + ' KB' : 'N/A'}</div>
+          <div>Uploaded: ${dateStr}</div>
         </div>
       `;
-    });
+    }
   }
-  
-  triggerToast(`Loaded verification log for ${ev.id}`);
+
+  // 2. Populate Side Panel Custody Chain
+  const timelineBox = document.getElementById('evidence-custody-chain');
+  if (timelineBox) {
+    timelineBox.innerHTML = '';
+    const custodyChain = ev.transfers || [];
+    if (custodyChain.length === 0) {
+      timelineBox.innerHTML = '<span style="color:var(--text-secondary); font-size:13px; padding:12px;">No transfer logs recorded.</span>';
+    } else {
+      custodyChain.forEach(log => {
+        const logDate = log.date ? new Date(log.date).toLocaleString() : (log.createdAt ? new Date(log.createdAt).toLocaleString() : 'N/A');
+        timelineBox.innerHTML += `
+          <div class="custody-log" style="background-color: var(--card-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <div>
+              <strong style="font-size: 13px; color: #FFFFFF; display: block; margin-bottom: 2px;">${log.action}</strong>
+              <span style="display:block; font-size:11px; color:var(--text-secondary);">Handler: <span style="color: var(--primary-color); font-weight: 500;">${log.handler}</span></span>
+            </div>
+            <span style="color:var(--text-secondary); font-size: 10px; font-family: monospace;">${logDate}</span>
+          </div>
+        `;
+      });
+    }
+  }
+
+  // 3. Populate Dedicated Evidence Detail Modal (modal-evidence-detail)
+  const modalTitle = document.getElementById('modal-ev-title');
+  const modalIdBadge = document.getElementById('modal-ev-id-badge');
+  const modalPreview = document.getElementById('modal-ev-preview');
+  const modalDownload = document.getElementById('modal-ev-download');
+  const modalMetadata = document.getElementById('modal-ev-metadata');
+  const modalCustody = document.getElementById('modal-ev-custody');
+  const modalDeleteContainer = document.getElementById('modal-ev-delete-container');
+
+  if (modalTitle) modalTitle.textContent = ev.name;
+  if (modalIdBadge) modalIdBadge.textContent = `${ev.id} | Case: ${ev.caseId}`;
+
+  // Preview in modal
+  if (modalPreview) {
+    if (isImg) {
+      modalPreview.innerHTML = `<img src="${downloadUrl}" style="max-width:100%; max-height:350px; object-fit:contain;">`;
+    } else {
+      modalPreview.innerHTML = `
+        <div style="display:flex; flex-direction:column; align-items:center; gap:12px; padding:30px;">
+          <i class="ri-file-shield-line" style="font-size:56px; color:var(--primary-color);"></i>
+          <span style="font-size:14px; font-weight:600; color:#FFF;">${ev.name}</span>
+          <span style="font-size:12px; color:var(--text-secondary); font-family:monospace;">MIME: ${ev.mimeType || 'application/octet-stream'}</span>
+        </div>
+      `;
+    }
+  }
+
+  // Download link bar
+  if (modalDownload) {
+    modalDownload.innerHTML = `
+      <div style="display:flex; align-items:center; gap:10px;">
+        <i class="ri-cloud-download-line" style="font-size:24px; color:var(--primary-color);"></i>
+        <div>
+          <strong style="font-size:13px; color:#FFF; display:block;">Cloudinary Digital Artifact Asset</strong>
+          <span style="font-size:11px; color:var(--text-secondary);">${ev.fileSize ? (ev.fileSize / 1024).toFixed(1) + ' KB' : 'Cloud Storage'} | Format: ${(ev.cloudinaryFormat || ev.mimeType || 'File').toUpperCase()}</span>
+        </div>
+      </div>
+      ${downloadUrl !== '#' ? `<a href="${downloadUrl}" target="_blank" download class="btn-primary" style="padding: 8px 16px; font-size: 12px; width: auto; background-color: var(--primary-color); display: inline-flex; align-items: center; gap: 6px;"><i class="ri-download-line"></i> Download Asset</a>` : '<span style="color:var(--text-secondary); font-size:12px;">No URL</span>'}
+    `;
+  }
+
+  // Metadata grid
+  if (modalMetadata) {
+    modalMetadata.innerHTML = `
+      <div><span style="font-size:11px; color:var(--text-secondary); display:block;">Evidence ID</span><strong style="font-family:monospace; color:#FFF;">${ev.id}</strong></div>
+      <div><span style="font-size:11px; color:var(--text-secondary); display:block;">Case ID</span><strong style="font-family:monospace; color:var(--primary-color);">${ev.caseId}</strong></div>
+      <div><span style="font-size:11px; color:var(--text-secondary); display:block;">Category</span><span class="badge badge-warning" style="font-size:10px;">${ev.category || 'Other'}</span></div>
+      <div><span style="font-size:11px; color:var(--text-secondary); display:block;">Current Status</span><span class="badge badge-status-solved" style="font-size:10px;">${ev.verificationStatus || 'Verified'}</span></div>
+      <div><span style="font-size:11px; color:var(--text-secondary); display:block;">Uploaded By</span><strong style="color:#FFF;">${uploaderStr}</strong></div>
+      <div><span style="font-size:11px; color:var(--text-secondary); display:block;">Upload Timestamp</span><span style="color:var(--text-secondary); font-size:12px;">${dateStr}</span></div>
+      <div><span style="font-size:11px; color:var(--text-secondary); display:block;">Chain of Custody Status</span><span style="color:var(--text-secondary); font-size:12px;">${ev.chainOfCustodyStatus || 'Secured in Vault'}</span></div>
+      <div><span style="font-size:11px; color:var(--text-secondary); display:block;">Remarks / Notes</span><span style="color:var(--text-secondary); font-size:12px;">${ev.remarks || 'No remarks added.'}</span></div>
+    `;
+  }
+
+  // Custody timeline
+  if (modalCustody) {
+    modalCustody.innerHTML = '';
+    const transfers = ev.transfers || [];
+    if (transfers.length === 0) {
+      modalCustody.innerHTML = '<span style="color:var(--text-secondary); font-size:12px;">No custody transfer logs recorded yet.</span>';
+    } else {
+      transfers.forEach(t => {
+        const tDate = t.date ? new Date(t.date).toLocaleString() : (t.createdAt ? new Date(t.createdAt).toLocaleString() : 'N/A');
+        modalCustody.innerHTML += `
+          <div style="background-color: var(--card-color); border: 1px solid var(--border-color); border-radius: 6px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <strong style="font-size: 12px; color: #FFF; display: block;">${t.action}</strong>
+              <span style="font-size: 11px; color: var(--text-secondary);">Handler: <span style="color: var(--primary-color);">${t.handler}</span></span>
+            </div>
+            <span style="font-size: 10px; color: var(--text-secondary); font-family: monospace;">${tDate}</span>
+          </div>
+        `;
+      });
+    }
+  }
+
+  // Delete button if uploader or Super Admin
+  if (modalDeleteContainer) {
+    modalDeleteContainer.innerHTML = '';
+    if (userRole === 'SUPER_ADMIN' || (userRole === 'SUB_INSPECTOR' && ev.uploadedByOfficerId === currentOfficerId)) {
+      modalDeleteContainer.innerHTML = `
+        <button type="button" class="btn-primary" style="background-color: var(--danger-color); font-size: 12px; padding: 6px 14px; width: auto;" onclick="hideModal('modal-evidence-detail'); deleteEvidenceRecord('${ev.id}', '${ev.caseId}')">
+          <i class="ri-delete-bin-line"></i> Delete Evidence
+        </button>
+      `;
+    }
+  }
+
+  showModal('modal-evidence-detail');
+  triggerToast(`Loaded details for ${ev.id}`);
 }
 
 // Timeline Case selector & tracing
