@@ -81,6 +81,10 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
       throw new ApiError(404, 'Assigned case not found.');
     }
 
+    if (caseRecord.status === 'CLOSED' || (caseRecord as any).status === 'Closed' || (caseRecord as any).status === 'Solved') {
+      throw new ApiError(400, 'Cannot upload evidence to a CLOSED case file. Record is locked in permanent read-only status.');
+    }
+
     const targetCaseId = caseRecord.id;
     console.log('[DEBUG WORKFLOW] resolved Case.id:', targetCaseId);
 

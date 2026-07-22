@@ -152,6 +152,10 @@ export class CaseController {
       throw new ApiError(404, 'Case record not found.');
     }
 
+    if (existingCase.status === 'CLOSED' || (existingCase as any).status === 'Closed' || (existingCase as any).status === 'Solved') {
+      throw new ApiError(400, 'Cannot delete a CLOSED case file. Closed cases are locked permanently for audit and history compliance.');
+    }
+
     await prisma.timeline.deleteMany({ where: { caseId } });
     await prisma.caseNote.deleteMany({ where: { caseId } });
     await prisma.forensicReport.deleteMany({ where: { caseId } });

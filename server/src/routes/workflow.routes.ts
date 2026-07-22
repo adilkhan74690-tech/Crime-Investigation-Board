@@ -178,12 +178,24 @@ router.post('/create-case', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SU
 }));
 
 
+// Helper: Block modifications on CLOSED cases
+async function ensureCaseNotClosed(caseId: string) {
+  if (!caseId) return;
+  const targetCase = await prisma.case.findFirst({
+    where: { OR: [{ id: caseId }, { firId: caseId }] }
+  });
+  if (targetCase && (targetCase.status === 'CLOSED' || (targetCase as any).status === 'Closed' || (targetCase as any).status === 'Solved')) {
+    throw new ApiError(400, `Cannot modify CLOSED Case "${targetCase.id}". Case file is locked in permanent read-only status.`);
+  }
+}
+
 // 3. Request Forensic Analysis (Sub Inspector)
 
 // 5. Submit Forensic Report Findings (Forensic Specialist)
 router.post('/submit-forensic', authenticateToken, authorizeRoles('SUPER_ADMIN', 'FORENSIC_OFFICER'), asyncHandler(async (req: any, res: any) => {
   const { caseId, reportTitle, findings, analystName } = req.body;
   if (!caseId || !findings) throw new ApiError(400, 'Missing caseId or findings content.');
+  await ensureCaseNotClosed(caseId);
 
   const report = await prisma.forensicReport.create({
     data: {
@@ -221,7 +233,8 @@ router.post('/submit-forensic', authenticateToken, authorizeRoles('SUPER_ADMIN',
 router.post('/complete-investigation', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SUB_INSPECTOR'), asyncHandler(async (req: any, res: any) => {
   const { caseId } = req.body;
   if (!caseId) throw new ApiError(400, 'Missing caseId.');
-  
+  await ensureCaseNotClosed(caseId);
+
   await logWorkflowAction(req, req.user.officerId, req.user.role, 'Investigation Completed', 'Investigation completed and submitted for Superintendent review.', caseId);
 
   await prisma.timeline.create({
@@ -242,6 +255,7 @@ router.post('/complete-investigation', authenticateToken, authorizeRoles('SUPER_
 router.post('/review-case', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SUPERINTENDENT'), asyncHandler(async (req: any, res: any) => {
   const { caseId, notes } = req.body;
   if (!caseId || !notes) throw new ApiError(400, 'Missing caseId or review notes.');
+  await ensureCaseNotClosed(caseId);
 
   await prisma.timeline.create({
     data: {

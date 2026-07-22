@@ -1155,8 +1155,11 @@ function renderCasesTable(filteredList = null) {
 
       // Contextual Action Buttons (Role-based Workflow Matrix)
       let actionBtnHtml = '';
+      const isClosedItem = item.status === 'CLOSED' || item.status === 'Closed' || item.status === 'Solved' || item.status === 'FORENSIC_APPROVED';
 
-      if (activeRole === 'SUPER_ADMIN') {
+      if (isClosedItem) {
+        actionBtnHtml = `<button class="btn-primary" style="padding: 6px 12px; font-size: 11px; width: auto; background-color: var(--border-light);" onclick="openCaseDetail('${item.linkedCaseId || item.id}')"><i class="ri-eye-line"></i> View Details</button>`;
+      } else if (activeRole === 'SUPER_ADMIN') {
         // SUPER_ADMIN: Register FIR, Assign/Reassign SI, View Case, Delete Case.
         // NEVER SHOW: Start Investigation, Upload Evidence, Upload Forensic Report, Investigation Notes.
         let assignBtn = `<button class="btn-primary" style="padding: 6px 12px; font-size: 11px; width: auto; background-color: var(--primary-color);" onclick="showAssignSiModal('${item.id}')"><i class="ri-user-shared-line"></i> ${item.assignedOfficer && item.assignedOfficer !== 'Not Assigned' ? 'Reassign SI' : 'Assign SI'}</button>`;
@@ -1314,25 +1317,47 @@ function openCaseDetail(caseId) {
   const currentOfficerId = sessionStorage.getItem('cib_officer_id');
   const isAssigned = target.officerId === currentOfficerId || target.createdBy === currentOfficerId || activeRole === 'SUPER_ADMIN';
 
-  // Action Buttons
+  const isClosed = target.status === 'CLOSED' || target.status === 'Closed' || target.status === 'Solved' || target.status === 'FORENSIC_APPROVED';
+
+  // Action Buttons & Read-Only Banner
   const actionsContainer = document.getElementById('case-actions-container');
   if (actionsContainer) {
     actionsContainer.innerHTML = '';
-    if (activeRole === 'SUPER_ADMIN' || activeRole === 'SUPERINTENDENT') {
-      actionsContainer.innerHTML += `
-        <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--success-color);" onclick="spApproveCase('${target.id}')"><i class="ri-checkbox-circle-line"></i> Approve Case / Chargesheet</button>
-        <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--warning-color);" onclick="spRequestChanges('${target.id}')"><i class="ri-edit-line"></i> Request Changes</button>
-        <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--danger-color);" onclick="spRejectCase('${target.id}')"><i class="ri-close-circle-line"></i> Reject Investigation</button>
-        <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--surface-color); border: 1px solid var(--border-color);" onclick="showReviewCaseModal('${target.id}')"><i class="ri-survey-line"></i> Log Review Notes</button>
+    if (isClosed) {
+      const closedDate = target.updatedAt ? new Date(target.updatedAt).toLocaleString() : 'Archived';
+      actionsContainer.innerHTML = `
+        <div style="width: 100%; padding: 14px 20px; background-color: rgba(16, 185, 129, 0.1); border: 1px solid #10B981; border-radius: 8px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <i class="ri-checkbox-circle-fill" style="font-size: 24px; color: #10B981;"></i>
+            <div>
+              <span style="font-weight: 700; color: #10B981; font-size: 14px; display: block;">INVESTIGATION OFFICIALLY CLOSED</span>
+              <span style="font-size: 12px; color: var(--text-secondary);">This case has been approved by Superintendent of Police and is locked in permanent read-only status.</span>
+            </div>
+          </div>
+          <div style="text-align: right; font-size: 11px; color: var(--text-secondary);">
+            <div><strong style="color: #FFF;">Approved By:</strong> Superintendent of Police</div>
+            <div><strong style="color: #FFF;">Final Status:</strong> <span class="badge" style="background-color: rgba(16, 185, 129, 0.2); color: #10B981; font-weight: 700; padding: 2px 6px;">CLOSED</span></div>
+            <div><strong style="color: #FFF;">Closed Date:</strong> ${closedDate}</div>
+          </div>
+        </div>
       `;
-    }
-    
-    if ((activeRole === 'SUB_INSPECTOR' || activeRole === 'SUPER_ADMIN') && isAssigned) {
-      actionsContainer.innerHTML += `
-        <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px;" onclick="showEvidenceUploadModal('${target.id}')"><i class="ri-upload-cloud-line"></i> Upload Evidence</button>
-        <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--border-light);" onclick="showRequestForensicModal('${target.id}')"><i class="ri-microscope-line"></i> Send To Forensics</button>
-        <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--success-color);" onclick="forwardCaseToSuperintendent('${target.id}')"><i class="ri-send-plane-line"></i> Forward to Superintendent</button>
-      `;
+    } else {
+      if (activeRole === 'SUPER_ADMIN' || activeRole === 'SUPERINTENDENT') {
+        actionsContainer.innerHTML += `
+          <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--success-color);" onclick="spApproveCase('${target.id}')"><i class="ri-checkbox-circle-line"></i> Approve Case / Chargesheet</button>
+          <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--warning-color);" onclick="spRequestChanges('${target.id}')"><i class="ri-edit-line"></i> Request Changes</button>
+          <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--danger-color);" onclick="spRejectCase('${target.id}')"><i class="ri-close-circle-line"></i> Reject Investigation</button>
+          <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--surface-color); border: 1px solid var(--border-color);" onclick="showReviewCaseModal('${target.id}')"><i class="ri-survey-line"></i> Log Review Notes</button>
+        `;
+      }
+      
+      if ((activeRole === 'SUB_INSPECTOR' || activeRole === 'SUPER_ADMIN') && isAssigned) {
+        actionsContainer.innerHTML += `
+          <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px;" onclick="showEvidenceUploadModal('${target.id}')"><i class="ri-upload-cloud-line"></i> Upload Evidence</button>
+          <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--border-light);" onclick="showRequestForensicModal('${target.id}')"><i class="ri-microscope-line"></i> Send To Forensics</button>
+          <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--success-color);" onclick="forwardCaseToSuperintendent('${target.id}')"><i class="ri-send-plane-line"></i> Forward to Superintendent</button>
+        `;
+      }
     }
   }
 
@@ -1437,14 +1462,17 @@ function openCaseDetail(caseId) {
     } else {
       caseNotes.forEach(n => {
         const nDate = n.createdAt ? new Date(n.createdAt).toLocaleString() : (n.timestamp ? new Date(n.timestamp).toLocaleString() : 'N/A');
+        const noteActionBtns = isClosed ? '' : `
+          <button class="btn-primary" style="padding:2px 6px; font-size:10px; width:auto; background-color:var(--border-light);" onclick="editCaseNote(${n.id}, \`${(n.note || '').replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)"><i class="ri-edit-line"></i> Edit</button>
+          <button class="btn-primary" style="padding:2px 6px; font-size:10px; width:auto; background-color:var(--danger-color);" onclick="deleteCaseNote(${n.id}, '${target.id}')"><i class="ri-delete-bin-line"></i> Delete</button>
+        `;
         notesListBox.innerHTML += `
           <div style="background-color: var(--card-color); border: 1px solid var(--border-color); padding: 14px; border-radius: 8px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
               <span style="font-size:12px; font-weight:600; color: var(--primary-color);">${n.author || 'Officer'}</span>
               <div style="display:flex; align-items:center; gap:8px;">
                 <span style="font-size:11px; color:var(--text-secondary); font-family:monospace;">${nDate}</span>
-                <button class="btn-primary" style="padding:2px 6px; font-size:10px; width:auto; background-color:var(--border-light);" onclick="editCaseNote(${n.id}, \`${(n.note || '').replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)"><i class="ri-edit-line"></i> Edit</button>
-                <button class="btn-primary" style="padding:2px 6px; font-size:10px; width:auto; background-color:var(--danger-color);" onclick="deleteCaseNote(${n.id}, '${target.id}')"><i class="ri-delete-bin-line"></i> Delete</button>
+                ${noteActionBtns}
               </div>
             </div>
             <p style="font-size:13px; color: #FFF; line-height: 1.5; margin: 0;">${n.note}</p>

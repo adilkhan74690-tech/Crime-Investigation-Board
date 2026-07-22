@@ -273,6 +273,10 @@ export class FirController {
       throw new ApiError(404, 'FIR record not found.');
     }
 
+    if (existingFir.status === 'Closed' || existingFir.case?.status === 'CLOSED' || (existingFir.case as any)?.status === 'Closed') {
+      throw new ApiError(400, 'Cannot delete a CLOSED FIR or Case file. Record is locked permanently for audit and history compliance.');
+    }
+
     const linkedCaseId = existingFir.case?.id;
 
     if (linkedCaseId) {
