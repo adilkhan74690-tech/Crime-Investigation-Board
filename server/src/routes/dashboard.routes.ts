@@ -42,6 +42,9 @@ router.get('/dashboard-payload', authenticateToken, asyncHandler(async (req: any
     };
   });
 
+  console.log(`[DASHBOARD PAYLOAD AUDIT] Total cases returned from PostgreSQL: ${cases.length}`);
+  console.log(`[DASHBOARD PAYLOAD AUDIT] Case statuses:`, cases.map((c: any) => `${c.id}:${c.status}`));
+
   const officers = await prisma.officer.findMany({
     include: { user: true }
   });

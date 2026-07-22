@@ -1098,9 +1098,14 @@ function renderCasesTable(filteredList = null) {
 
   const isClosedStatus = (s) => s === 'CLOSED' || s === 'Closed' || s === 'Solved' || s === 'FORENSIC_APPROVED';
   
-  // If filteredList is provided (e.g. status filter or search), use it directly.
-  // Otherwise, default active tables show in-progress cases only.
-  const displayItems = filteredList ? filteredList : items.filter(i => !isClosedStatus(i.status));
+  // If filteredList is provided (e.g. from filterCases or search), use it directly.
+  // Default view (All) displays ALL investigation records regardless of status.
+  const displayItems = filteredList ? filteredList : items;
+
+  console.log('[FRONTEND API AUDIT] Total cases loaded in memory:', (window.CIB_DB.cases || []).length);
+  console.log('[FRONTEND API AUDIT] Case statuses in memory:', (window.CIB_DB.cases || []).map(c => `${c.id}:${c.status}`));
+  console.log('[FRONTEND API AUDIT] Frontend filtered array length (displayItems):', displayItems.length);
+
   const total = displayItems.length;
   const startIndex = (casesPage - 1) * casesPageSize;
   const endIndex = startIndex + casesPageSize;
@@ -1199,18 +1204,74 @@ function renderCasesTable(filteredList = null) {
 function filterCases() {
   const priorityFilter = document.getElementById('filter-priority') ? document.getElementById('filter-priority').value : 'All';
   const statusFilter = document.getElementById('filter-status') ? document.getElementById('filter-status').value : 'All';
+  const isClosedStatus = (s) => s === 'CLOSED' || s === 'Closed' || s === 'Solved' || s === 'FORENSIC_APPROVED';
+
+  if (priorityFilter === 'All' && statusFilter === 'All') {
+    renderCasesTable(null);
+    return;
+  }
   
-  let result = window.CIB_DB.cases || [];
+  let firs = window.CIB_DB.firs || [];
+  let cases = window.CIB_DB.cases || [];
+  let allItems = [];
+
+  firs.forEach(f => {
+    const linkedCase = cases.find(c => c.firId === f.id || c.id === f.case?.id);
+    let officerName = null;
+    let officerRole = null;
+    if (f.officer && f.officer.user) {
+      officerName = f.officer.user.name;
+      officerRole = f.officer.user.role;
+    } else if (linkedCase && linkedCase.assignedOfficer && linkedCase.assignedOfficer.user) {
+      officerName = linkedCase.assignedOfficer.user.name;
+      officerRole = linkedCase.assignedOfficer.user.role;
+    }
+    const effectiveStatus = (linkedCase && isClosedStatus(linkedCase.status)) ? linkedCase.status : (f.status || 'Registered');
+    allItems.push({
+      id: f.id,
+      title: f.title,
+      crimeCategory: f.crimeCategory || 'General',
+      priority: linkedCase ? linkedCase.priority : 'Medium',
+      assignedOfficer: officerName,
+      assignedRole: officerRole,
+      status: effectiveStatus,
+      createdDate: f.createdAt || f.date,
+      location: f.location || 'N/A',
+      isFir: true,
+      linkedCaseId: linkedCase ? linkedCase.id : null
+    });
+  });
+
+  cases.forEach(c => {
+    if (!allItems.some(i => i.id === c.id || (c.firId && i.id === c.firId))) {
+      let officerName = c.assignedOfficer && c.assignedOfficer.user ? c.assignedOfficer.user.name : (typeof c.assignedOfficer === 'string' ? c.assignedOfficer : null);
+      allItems.push({
+        id: c.id,
+        title: c.title,
+        crimeCategory: c.crimeType || 'General',
+        priority: c.priority || 'Medium',
+        assignedOfficer: officerName,
+        status: c.status || 'Active',
+        createdDate: c.createdAt || c.createdDate,
+        location: c.location || 'N/A',
+        isFir: false,
+        linkedCaseId: c.id
+      });
+    }
+  });
+
+  let result = allItems;
   
   if (priorityFilter !== 'All') {
     result = result.filter(c => c.priority === priorityFilter);
   }
-  if (statusFilter !== 'All') {
-    if (statusFilter === 'CLOSED' || statusFilter === 'Solved') {
-      result = result.filter(c => c.status === 'CLOSED' || c.status === 'Closed' || c.status === 'Solved' || c.status === 'FORENSIC_APPROVED');
-    } else {
-      result = result.filter(c => c.status === statusFilter);
-    }
+
+  if (statusFilter === 'Active') {
+    result = result.filter(c => !isClosedStatus(c.status));
+  } else if (statusFilter === 'CLOSED' || statusFilter === 'Closed' || statusFilter === 'Solved') {
+    result = result.filter(c => isClosedStatus(c.status));
+  } else if (statusFilter !== 'All') {
+    result = result.filter(c => c.status === statusFilter);
   }
   
   renderCasesTable(result);

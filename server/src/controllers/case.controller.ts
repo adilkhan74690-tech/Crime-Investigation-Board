@@ -95,6 +95,10 @@ export class CaseController {
         } : null
       };
     });
+
+    console.log(`[CASES API AUDIT] Total cases returned from PostgreSQL: ${formatted.length}`);
+    console.log(`[CASES API AUDIT] Case statuses:`, formatted.map((c: any) => `${c.id}:${c.status}`));
+
     res.json(formatResponse(formatted));
   });
 
