@@ -11,13 +11,15 @@ export class CaseController {
   public static listCases = asyncHandler(async (req: AuthRequest, res: Response) => {
     let list;
     if (req.user?.role === 'INSPECTOR' || req.user?.role === 'SUB_INSPECTOR') {
-      const assignments = await prisma.caseAssignmentHistory.findMany({
-        where: { officerId: req.user.officerId },
-        select: { caseId: true }
-      });
-      const caseIds = assignments.map((a: any) => a.caseId);
       list = await prisma.case.findMany({
-        where: { id: { in: caseIds } },
+        where: {
+          OR: [
+            { officerId: req.user.officerId },
+            { createdBy: req.user.officerId },
+            { assignmentHistory: { some: { officerId: req.user.officerId } } },
+            { fir: { officerId: req.user.officerId } }
+          ]
+        },
         orderBy: { createdAt: 'desc' },
         include: {
           assignedOfficer: {
@@ -27,15 +29,35 @@ export class CaseController {
           },
           fir: true,
           witnesses: true,
-          timeline: true,
+          timeline: { orderBy: { createdAt: 'desc' } },
           evidence: true,
           forensics: true,
           victims: true,
-          suspects: true
+          suspects: true,
+          caseNotes: { orderBy: { createdAt: 'desc' } },
+          assignmentHistory: true
         }
       });
     } else {
-      list = await CaseService.getCases();
+      list = await prisma.case.findMany({
+        orderBy: { createdAt: 'desc' },
+        include: {
+          assignedOfficer: {
+            include: {
+              user: true
+            }
+          },
+          fir: true,
+          witnesses: true,
+          timeline: { orderBy: { createdAt: 'desc' } },
+          evidence: true,
+          forensics: true,
+          victims: true,
+          suspects: true,
+          caseNotes: { orderBy: { createdAt: 'desc' } },
+          assignmentHistory: true
+        }
+      });
     }
     const formatted = list.map((c: any) => {
       const hasForensic = c.forensics && c.forensics.length > 0;
@@ -59,6 +81,8 @@ export class CaseController {
         forensics: c.forensics,
         victims: c.victims,
         suspects: c.suspects,
+        caseNotes: c.caseNotes,
+        assignmentHistory: c.assignmentHistory,
         assignedOfficer: c.assignedOfficer ? {
           id: c.assignedOfficer.id,
           rank: c.assignedOfficer.rank,
@@ -72,12 +96,35 @@ export class CaseController {
 
   public static getCase = asyncHandler(async (req: AuthRequest, res: Response) => {
     const { id } = req.params;
-    const item = await CaseService.getCaseById(id as string) as any;
-    if (req.user?.role === 'INSPECTOR' || req.user?.role === 'SUB_INSPECTOR') {
-      if (item.officerId !== req.user?.officerId) {
-        throw new ApiError(403, 'Insufficient security level clearance for access.');
+    const item = await prisma.case.findFirst({
+      where: {
+        OR: [
+          { id: id as string },
+          { firId: id as string }
+        ]
+      },
+      include: {
+        assignedOfficer: {
+          include: {
+            user: true
+          }
+        },
+        fir: true,
+        witnesses: true,
+        timeline: { orderBy: { createdAt: 'desc' } },
+        evidence: true,
+        forensics: true,
+        victims: true,
+        suspects: true,
+        caseNotes: { orderBy: { createdAt: 'desc' } },
+        assignmentHistory: true
       }
+    }) as any;
+
+    if (!item) {
+      throw new ApiError(404, 'Case record not found.');
     }
+
     const hasForensic = item.forensics && item.forensics.length > 0;
     const isUnderForensicReview = hasForensic || (item.fir && item.fir.status === 'UNDER_FORENSIC_REVIEW');
     if (isUnderForensicReview) {

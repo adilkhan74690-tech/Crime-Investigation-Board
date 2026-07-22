@@ -444,8 +444,11 @@
           <!-- Workspace Tabs -->
           <div class="detail-tabs">
             <button class="tab-btn active" onclick="switchDetailTab('overview')">Overview</button>
+            <button class="tab-btn" onclick="switchDetailTab('fir-tab')">FIR Details</button>
+            <button class="tab-btn" onclick="switchDetailTab('evidence-tab')">Evidence Logs</button>
             <button class="tab-btn" onclick="switchDetailTab('timeline-tab')">Investigation Timeline</button>
-            <button class="tab-btn" onclick="switchDetailTab('evidence-tab')">Evidence logs</button>
+            <button class="tab-btn" onclick="switchDetailTab('notes-tab')">Investigation Notes</button>
+            <button class="tab-btn" onclick="switchDetailTab('forensic-tab')">Forensic Reports</button>
             <button class="tab-btn" onclick="switchDetailTab('witnesses')">Witness Statements</button>
           </div>
 
@@ -453,17 +456,13 @@
           <div id="tab-overview" class="tab-content active">
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
               <div>
-                <span style="display:block; font-size:12px; color: var(--text-secondary); text-transform: uppercase;">Victim / Target Target</span>
+                <span style="display:block; font-size:12px; color: var(--text-secondary); text-transform: uppercase;">Victim / Complainant</span>
                 <strong id="detail-victim" style="font-size: 15px; margin-top: 4px; display:block;">--</strong>
               </div>
               <div>
                 <span style="display:block; font-size:12px; color: var(--text-secondary); text-transform: uppercase;">Primary Suspects</span>
                 <strong id="detail-suspects" style="font-size: 15px; margin-top: 4px; display:block;">--</strong>
               </div>
-            </div>
-            <div style="margin-top: 24px;">
-              <span style="display:block; font-size:12px; color: var(--text-secondary); text-transform: uppercase;">Case Officer Notes</span>
-              <p id="detail-notes" style="font-size: 14px; margin-top: 8px; line-height: 1.6; color: var(--text-secondary);"></p>
             </div>
             <div id="case-actions-panel" style="margin-top: 24px; border-top: 1px solid var(--border-color); padding-top: 20px;">
               <span style="display:block; font-size:12px; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 12px; font-weight: 600;">Classified Action Controls</span>
@@ -473,9 +472,9 @@
             </div>
           </div>
 
-          <div id="tab-timeline-tab" class="tab-content">
-            <div id="detail-timeline" class="timeline-workflow">
-              <!-- Timeline nodes -->
+          <div id="tab-fir-tab" class="tab-content">
+            <div id="detail-fir-info" style="background-color: var(--card-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px;">
+              <!-- FIR Info loaded dynamically -->
             </div>
           </div>
 
@@ -485,11 +484,39 @@
             </div>
           </div>
 
+          <div id="tab-timeline-tab" class="tab-content">
+            <div id="detail-timeline" class="timeline-workflow">
+              <!-- Timeline nodes -->
+            </div>
+          </div>
+
+          <div id="tab-notes-tab" class="tab-content">
+            <div style="margin-bottom: 20px; background-color: var(--card-color); border: 1px solid var(--border-color); padding: 16px; border-radius: 8px;">
+              <h4 style="font-size: 14px; font-weight: 600; margin-bottom: 10px; color: #FFF;">Add Investigation Note</h4>
+              <form onsubmit="handleAddNoteSubmit(event)" style="display: flex; flex-direction: column; gap: 10px;">
+                <textarea id="case-note-input" class="form-input" style="width: 100%; padding: 10px; height: 75px; background-color: var(--surface-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px; resize: none;" placeholder="Type case note observations, suspect leads, or evidence findings..." required></textarea>
+                <div style="display: flex; justify-content: flex-end;">
+                  <button type="submit" class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px;"><i class="ri-add-line"></i> Save Note</button>
+                </div>
+              </form>
+            </div>
+            <div id="detail-notes-list" style="display: flex; flex-direction: column; gap: 12px;">
+              <!-- Case notes loaded dynamically -->
+            </div>
+          </div>
+
+          <div id="tab-forensic-tab" class="tab-content">
+            <div id="detail-forensic-list" style="display: flex; flex-direction: column; gap: 16px;">
+              <!-- Forensic reports loaded dynamically -->
+            </div>
+          </div>
+
           <div id="tab-witnesses" class="tab-content">
             <div id="detail-witnesses" style="display: flex; flex-direction: column; gap: 12px;">
               <!-- Loaded dynamically -->
             </div>
           </div>
+        </div>
         </div>
       </main>
 

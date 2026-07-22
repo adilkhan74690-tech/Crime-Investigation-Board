@@ -456,5 +456,150 @@ router.post('/approve-chargesheet', authenticateToken, authorizeRoles('SUPER_ADM
   res.json(formatResponse(closedCase, 'Chargesheet approved and case closed successfully.'));
 }));
 
+// 9. Add Investigation Note (Inspector / Sub Inspector / Super Admin)
+router.post('/notes', authenticateToken, authorizeRoles('SUPER_ADMIN', 'INSPECTOR', 'SUB_INSPECTOR'), asyncHandler(async (req: any, res: any) => {
+  const { caseId, note } = req.body;
+  if (!caseId || !note) throw new ApiError(400, 'Missing caseId or note content.');
+
+  const createdNote = await prisma.caseNote.create({
+    data: {
+      caseId,
+      note,
+      author: `${req.user.name} (${req.user.role})`
+    }
+  });
+
+  await prisma.timeline.create({
+    data: {
+      caseId,
+      step: 'Investigation Note Added',
+      completed: true,
+      details: `Note added by ${req.user.name}: "${note.length > 50 ? note.slice(0, 50) + '...' : note}"`
+    }
+  }).catch(console.error);
+
+  await logWorkflowAction(req, req.user.officerId, req.user.role, 'Note Added', `Added investigation note for case ${caseId}`, caseId).catch(console.error);
+
+  res.json(formatResponse(createdNote, 'Investigation note recorded in PostgreSQL successfully.'));
+}));
+
+// 10. Edit Investigation Note
+router.put('/notes/:id', authenticateToken, authorizeRoles('SUPER_ADMIN', 'INSPECTOR', 'SUB_INSPECTOR'), asyncHandler(async (req: any, res: any) => {
+  const noteId = parseInt(req.params.id);
+  const { note } = req.body;
+
+  if (!note) throw new ApiError(400, 'Missing note content.');
+
+  const updatedNote = await prisma.caseNote.update({
+    where: { id: noteId },
+    data: { note }
+  });
+
+  await prisma.timeline.create({
+    data: {
+      caseId: updatedNote.caseId,
+      step: 'Investigation Note Updated',
+      completed: true,
+      details: `Note ID ${noteId} edited by ${req.user.name}.`
+    }
+  }).catch(console.error);
+
+  res.json(formatResponse(updatedNote, 'Investigation note updated successfully.'));
+}));
+
+// 11. Delete Investigation Note
+router.delete('/notes/:id', authenticateToken, authorizeRoles('SUPER_ADMIN', 'INSPECTOR', 'SUB_INSPECTOR'), asyncHandler(async (req: any, res: any) => {
+  const noteId = parseInt(req.params.id);
+
+  const existing = await prisma.caseNote.findUnique({ where: { id: noteId } });
+  if (!existing) throw new ApiError(404, 'Case note not found.');
+
+  await prisma.caseNote.delete({ where: { id: noteId } });
+
+  await prisma.timeline.create({
+    data: {
+      caseId: existing.caseId,
+      step: 'Investigation Note Deleted',
+      completed: true,
+      details: `Note ID ${noteId} deleted by ${req.user.name}.`
+    }
+  }).catch(console.error);
+
+  res.json(formatResponse(null, 'Investigation note deleted successfully.'));
+}));
+
+// 12. Accept Forensic Report (Inspector / Super Admin)
+router.post('/accept-forensic-report', authenticateToken, authorizeRoles('SUPER_ADMIN', 'INSPECTOR'), asyncHandler(async (req: any, res: any) => {
+  const { reportId, caseId } = req.body;
+  if (!reportId) throw new ApiError(400, 'Missing reportId.');
+
+  const updatedReport = await prisma.forensicReport.update({
+    where: { id: reportId },
+    data: {
+      status: 'Approved',
+      approvalDate: `Accepted by Inspector ${req.user.name} on ${new Date().toLocaleDateString()}`
+    }
+  });
+
+  const targetCaseId = caseId || updatedReport.caseId;
+
+  // Update linked evidence
+  await prisma.evidence.updateMany({
+    where: { caseId: targetCaseId },
+    data: {
+      verificationStatus: 'Verified Integrity',
+      chainOfCustodyStatus: 'Forensic Report Approved & Verified'
+    }
+  }).catch(console.error);
+
+  // Timeline entry
+  await prisma.timeline.create({
+    data: {
+      caseId: targetCaseId,
+      step: 'Forensic Report Accepted',
+      completed: true,
+      details: `Inspector ${req.user.name} accepted forensic report "${updatedReport.reportTitle}".`
+    }
+  }).catch(console.error);
+
+  await NotificationService.notifyRole('FORENSIC_OFFICER', `Forensic Report ${reportId} accepted by Inspector ${req.user.name}.`, 'Info').catch(console.error);
+
+  res.json(formatResponse(updatedReport, 'Forensic report accepted and evidence verified successfully.'));
+}));
+
+// 13. Return Forensic Report for Revision (Inspector / Super Admin)
+router.post('/return-forensic-report', authenticateToken, authorizeRoles('SUPER_ADMIN', 'INSPECTOR'), asyncHandler(async (req: any, res: any) => {
+  const { reportId, caseId, remarks } = req.body;
+  if (!reportId || !remarks) throw new ApiError(400, 'Missing reportId or revision remarks.');
+
+  const existing = await prisma.forensicReport.findUnique({ where: { id: reportId } });
+  if (!existing) throw new ApiError(404, 'Forensic report not found.');
+
+  const updatedReport = await prisma.forensicReport.update({
+    where: { id: reportId },
+    data: {
+      status: 'Returned for Revision',
+      observations: `${existing.observations || ''}\n[Inspector Revision Note]: ${remarks}`,
+      approvalDate: 'Returned for Revision'
+    }
+  });
+
+  const targetCaseId = caseId || existing.caseId;
+
+  // Timeline entry
+  await prisma.timeline.create({
+    data: {
+      caseId: targetCaseId,
+      step: 'Forensic Report Returned',
+      completed: true,
+      details: `Inspector ${req.user.name} returned report "${existing.reportTitle}" for revision. Remarks: "${remarks}"`
+    }
+  }).catch(console.error);
+
+  await NotificationService.notifyRole('FORENSIC_OFFICER', `Forensic Report ${reportId} returned for revision by Inspector ${req.user.name}. Remarks: ${remarks}`, 'Alert').catch(console.error);
+
+  res.json(formatResponse(updatedReport, 'Forensic report returned for revision.'));
+}));
+
 export default router;
 export { logWorkflowAction };

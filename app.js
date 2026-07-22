@@ -1101,119 +1101,236 @@ function filterCases() {
 
 // Interactive Case details view
 function openCaseDetail(caseId) {
-  const target = window.CIB_DB.cases.find(c => c.id === caseId);
+  const target = (window.CIB_DB.cases || []).find(c => c.id === caseId || c.firId === caseId);
   if (!target) return;
   
   const boxDetails = document.getElementById('case-details-section');
   if (!boxDetails) return;
   boxDetails.style.display = 'block';
   document.getElementById('detail-case-title').textContent = `${target.id} : ${target.title}`;
-  document.getElementById('detail-victim').textContent = target.victim || 'Unknown';
   
-  // Resolve suspects list
+  // Victim / Suspects resolution
+  const victimName = target.victim || target.fir?.reporter || 'Not Specified';
+  document.getElementById('detail-victim').textContent = victimName;
+  
   const suspectsList = target.suspects || [];
-  document.getElementById('detail-suspects').textContent = suspectsList.length > 0 ? suspectsList.join(', ') : 'None logged';
-  document.getElementById('detail-notes').textContent = target.notes || 'No security notes recorded.';
+  document.getElementById('detail-suspects').textContent = suspectsList.length > 0 ? suspectsList.map(s => s.name || s).join(', ') : 'None logged';
 
+  const activeRole = sessionStorage.getItem('cib_officer_role') || 'SUPER_ADMIN';
+  const currentOfficerId = sessionStorage.getItem('cib_officer_id');
+  const isAssigned = target.officerId === currentOfficerId || target.createdBy === currentOfficerId || activeRole === 'SUPER_ADMIN';
+
+  // Action Buttons
   const actionsContainer = document.getElementById('case-actions-container');
   if (actionsContainer) {
     actionsContainer.innerHTML = '';
-    const activeRole = sessionStorage.getItem('cib_officer_role') || 'SUPER_ADMIN';
-    const isAssigned = target.officerId === sessionStorage.getItem('cib_officer_id') || activeRole === 'SUPER_ADMIN';
-
     if (activeRole === 'SUPER_ADMIN' || activeRole === 'SUPERINTENDENT') {
       actionsContainer.innerHTML += `
         <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--border-light);" onclick="showAssignInspectorModal('${target.id}')"><i class="ri-user-shared-line"></i> Assign Inspector</button>
         <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--warning-color);" onclick="showReviewCaseModal('${target.id}')"><i class="ri-survey-line"></i> Log Case Review</button>
       `;
-      if (target.status === 'Active') {
+      if (target.status === 'Active' || target.status === 'UNDER_FORENSIC_REVIEW') {
         actionsContainer.innerHTML += `
           <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--success-color);" onclick="approveChargesheet('${target.id}')"><i class="ri-checkbox-circle-line"></i> Approve Chargesheet & Close</button>
         `;
       }
     }
     
-    if (activeRole === 'INSPECTOR' && isAssigned) {
+    if ((activeRole === 'INSPECTOR' || activeRole === 'SUB_INSPECTOR') && isAssigned) {
       actionsContainer.innerHTML += `
         <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px;" onclick="showEvidenceUploadModal('${target.id}')"><i class="ri-upload-cloud-line"></i> Upload Evidence</button>
-        <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--border-light);" onclick="showRequestForensicModal('${target.id}')"><i class="ri-microscope-line"></i> Request Forensic</button>
+        <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--border-light);" onclick="showRequestForensicModal('${target.id}')"><i class="ri-microscope-line"></i> Send To Forensics</button>
+        <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--success-color);" onclick="forwardCaseToSuperintendent('${target.id}')"><i class="ri-send-plane-line"></i> Forward to Superintendent</button>
       `;
-      if (target.status === 'Active') {
-        actionsContainer.innerHTML += `
-          <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--success-color);" onclick="completeInvestigation('${target.id}')"><i class="ri-checkbox-circle-line"></i> Complete Investigation</button>
-        `;
-      }
     }
   }
-  
-  const witnessBox = document.getElementById('detail-witnesses');
-  witnessBox.innerHTML = '';
-  const witnessesList = target.witnesses || [];
-  if (witnessesList.length === 0) {
-    witnessBox.innerHTML = '<span style="color:var(--text-secondary); font-size:13px;">No witness statements recorded yet.</span>';
-  } else {
-    witnessesList.forEach(ws => {
-      witnessBox.innerHTML += `
-        <div style="margin-bottom:8px; border-bottom:1px solid var(--border-color); padding-bottom:8px;">
-          <strong style="font-size:13px; display:block;">${ws.witness || ws.name}</strong>
-          <span style="font-size:12px; color:var(--text-secondary); line-height:1.4;">"${ws.statement || 'No statement recorded.'}"</span>
+
+  // 1. FIR Tab Content
+  const firInfoBox = document.getElementById('detail-fir-info');
+  if (firInfoBox) {
+    const linkedFir = target.fir || (window.CIB_DB.firs || []).find(f => f.id === target.firId || f.id === target.id);
+    if (!linkedFir) {
+      firInfoBox.innerHTML = '<span style="color:var(--text-secondary); font-size:13px;">No linked FIR document found.</span>';
+    } else {
+      firInfoBox.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+          <div>
+            <h4 style="font-size:15px; font-weight:700; color:#FFF;">${linkedFir.title || 'First Information Report'}</h4>
+            <span style="font-size:12px; color:var(--primary-color); font-family:monospace;">FIR Reference ID: ${linkedFir.id}</span>
+          </div>
+          <span class="badge badge-warning" style="font-size:11px; padding:3px 10px;">${linkedFir.status || 'Registered'}</span>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:12px; font-size:12px; color:var(--text-secondary); margin-bottom:16px;">
+          <div><strong style="color:#FFF;">Complainant / Reporter:</strong> ${linkedFir.reporter || 'N/A'}</div>
+          <div><strong style="color:#FFF;">Contact Phone:</strong> ${linkedFir.complainantContact || 'N/A'}</div>
+          <div><strong style="color:#FFF;">Crime Category:</strong> ${linkedFir.crimeCategory || target.crimeType || 'General'}</div>
+          <div><strong style="color:#FFF;">Incident Location:</strong> ${linkedFir.location || target.location || 'N/A'}</div>
+          <div><strong style="color:#FFF;">Incident Time:</strong> ${linkedFir.incidentTime || 'N/A'}</div>
+          <div><strong style="color:#FFF;">Registration Date:</strong> ${linkedFir.createdAt ? new Date(linkedFir.createdAt).toLocaleString() : 'N/A'}</div>
+        </div>
+        <div style="background-color:var(--surface-color); padding:12px; border-radius:6px; border:1px solid var(--border-color);">
+          <strong style="font-size:12px; color:#FFF; display:block; margin-bottom:4px;">Incident Description / Brief:</strong>
+          <p style="font-size:13px; color:var(--text-secondary); line-height:1.5; margin:0;">${linkedFir.description || 'No description recorded.'}</p>
         </div>
       `;
-    });
+    }
   }
-  
-  const timelineBox = document.getElementById('detail-timeline');
-  timelineBox.innerHTML = '';
-  const stepsList = target.timeline || [];
-  stepsList.forEach(step => {
-    const stepEl = document.createElement('div');
-    stepEl.className = `timeline-step ${step.completed ? 'completed' : ''}`;
-    stepEl.innerHTML = `
-      <div class="timeline-dot"></div>
-      <div class="timeline-content">
-        <div class="timeline-title">
-          <span>${step.step}</span>
-          <span class="timeline-date">${step.date}</span>
-        </div>
-        ${step.details ? `<div class="timeline-desc">${step.details}</div>` : ''}
-      </div>
-    `;
-    timelineBox.appendChild(stepEl);
-  });
 
-  const evidenceList = document.getElementById('detail-evidence-list');
-  evidenceList.innerHTML = '';
-  const relatedEv = (window.CIB_DB.evidence || []).filter(e => 
-    e.caseId === caseId || 
-    (selectedCase && (e.caseId === selectedCase.id || e.caseId === selectedCase.firId))
-  );
-  if (relatedEv.length === 0) {
-    evidenceList.innerHTML = '<span style="color:var(--text-secondary); font-size:13px;">No related evidence found.</span>';
-  } else {
-    relatedEv.forEach(ev => {
-      const dateStr = ev.createdAt ? new Date(ev.createdAt).toLocaleDateString() : 'N/A';
-      const uploaderStr = ev.collectedBy || ev.uploadedByOfficerId || 'Officer';
-      const isImg = ev.previewType === 'image' || (ev.cloudinaryUrl && ev.cloudinaryUrl.match(/\.(jpg|jpeg|png|webp|gif)/i));
-      
-      evidenceList.innerHTML += `
-        <div class="evidence-card" onclick="previewEvidence('${ev.id}')" style="cursor:pointer; background-color: var(--card-color); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;">
-          ${isImg ? `<div class="evidence-thumb-container"><img class="evidence-thumb" src="${ev.cloudinaryUrl || ev.previewData}" style="width:100%; height:120px; object-fit:cover;"></div>` : `<div class="evidence-thumb-container" style="height:120px; display:flex; align-items:center; justify-content:center; background-color:rgba(37,99,235,0.08);"><i class="ri-file-shield-line" style="font-size:32px; color:var(--primary-color);"></i></div>`}
-          <div class="evidence-card-info" style="padding: 10px;">
-            <div class="evidence-card-title" style="font-weight: 600; font-size: 13px; color: #FFF; margin-bottom: 4px;">${ev.name}</div>
-            <div style="font-size: 11px; color: var(--text-secondary); font-family: monospace;">ID: <strong style="color: #FFF;">${ev.id}</strong></div>
-            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">Case: <strong style="color: var(--primary-color); font-family: monospace;">${ev.caseId}</strong></div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-top: 6px;">
-              <span class="badge badge-warning" style="font-size: 9px; padding: 2px 6px;">${ev.category || 'Other'}</span>
-              <span class="badge ${ev.verificationStatus === 'Verified' || ev.verificationStatus === 'Verified Integrity' ? 'badge-status-solved' : 'priority-medium'}" style="font-size:9px; padding:2px 6px;">${ev.verificationStatus || 'Verified'}</span>
+  // 2. Timeline Tab Content
+  const timelineBox = document.getElementById('detail-timeline');
+  if (timelineBox) {
+    timelineBox.innerHTML = '';
+    const stepsList = target.timeline || [];
+    if (stepsList.length === 0) {
+      timelineBox.innerHTML = '<span style="color:var(--text-secondary); font-size:13px;">No timeline steps logged yet.</span>';
+    } else {
+      stepsList.forEach(step => {
+        const stepEl = document.createElement('div');
+        stepEl.className = `timeline-step ${step.completed ? 'completed' : ''}`;
+        const stepDate = step.date ? new Date(step.date).toLocaleString() : (step.createdAt ? new Date(step.createdAt).toLocaleString() : 'N/A');
+        stepEl.innerHTML = `
+          <div class="timeline-dot"></div>
+          <div class="timeline-content">
+            <div class="timeline-title">
+              <span>${step.step}</span>
+              <span class="timeline-date">${stepDate}</span>
             </div>
-            <div style="font-size: 10px; color: var(--text-secondary); margin-top: 6px; display: flex; justify-content: space-between;">
-              <span>By: ${uploaderStr}</span>
-              <span>${dateStr}</span>
+            ${step.details ? `<div class="timeline-desc">${step.details}</div>` : ''}
+          </div>
+        `;
+        timelineBox.appendChild(stepEl);
+      });
+    }
+  }
+
+  // 3. Evidence Tab Content
+  const evidenceList = document.getElementById('detail-evidence-list');
+  if (evidenceList) {
+    evidenceList.innerHTML = '';
+    const relatedEv = (window.CIB_DB.evidence || []).filter(e => 
+      e.caseId === target.id || e.caseId === target.firId
+    );
+    if (relatedEv.length === 0) {
+      evidenceList.innerHTML = '<span style="color:var(--text-secondary); font-size:13px;">No related evidence found.</span>';
+    } else {
+      relatedEv.forEach(ev => {
+        const dateStr = ev.createdAt ? new Date(ev.createdAt).toLocaleDateString() : 'N/A';
+        const uploaderStr = ev.collectedBy || ev.uploadedByOfficerId || 'Officer';
+        const isImg = ev.previewType === 'image' || (ev.cloudinaryUrl && ev.cloudinaryUrl.match(/\.(jpg|jpeg|png|webp|gif)/i));
+        
+        evidenceList.innerHTML += `
+          <div class="evidence-card" onclick="previewEvidence('${ev.id}')" style="cursor:pointer; background-color: var(--card-color); border: 1px solid var(--border-color); border-radius: 8px; overflow: hidden;">
+            ${isImg ? `<div class="evidence-thumb-container"><img class="evidence-thumb" src="${ev.cloudinaryUrl || ev.previewData}" style="width:100%; height:120px; object-fit:cover;"></div>` : `<div class="evidence-thumb-container" style="height:120px; display:flex; align-items:center; justify-content:center; background-color:rgba(37,99,235,0.08);"><i class="ri-file-shield-line" style="font-size:32px; color:var(--primary-color);"></i></div>`}
+            <div class="evidence-card-info" style="padding: 10px;">
+              <div class="evidence-card-title" style="font-weight: 600; font-size: 13px; color: #FFF; margin-bottom: 4px;">${ev.name}</div>
+              <div style="font-size: 11px; color: var(--text-secondary); font-family: monospace;">ID: <strong style="color: #FFF;">${ev.id}</strong></div>
+              <div style="font-size: 11px; color: var(--text-secondary); margin-top: 2px;">Case: <strong style="color: var(--primary-color); font-family: monospace;">${ev.caseId}</strong></div>
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-top: 6px;">
+                <span class="badge badge-warning" style="font-size: 9px; padding: 2px 6px;">${ev.category || 'Other'}</span>
+                <span class="badge ${ev.verificationStatus === 'Verified' || ev.verificationStatus === 'Verified Integrity' ? 'badge-status-solved' : 'priority-medium'}" style="font-size:9px; padding:2px 6px;">${ev.verificationStatus || 'Verified'}</span>
+              </div>
+              <div style="font-size: 10px; color: var(--text-secondary); margin-top: 6px; display: flex; justify-content: space-between;">
+                <span>By: ${uploaderStr}</span>
+                <span>${dateStr}</span>
+              </div>
             </div>
           </div>
-        </div>
-      `;
-    });
+        `;
+      });
+    }
+  }
+
+  // 4. Notes Tab Content
+  const notesListBox = document.getElementById('detail-notes-list');
+  if (notesListBox) {
+    notesListBox.innerHTML = '';
+    const caseNotes = target.caseNotes || [];
+    if (caseNotes.length === 0) {
+      notesListBox.innerHTML = '<span style="color:var(--text-secondary); font-size:13px;">No investigation notes recorded for this case.</span>';
+    } else {
+      caseNotes.forEach(n => {
+        const nDate = n.createdAt ? new Date(n.createdAt).toLocaleString() : (n.timestamp ? new Date(n.timestamp).toLocaleString() : 'N/A');
+        notesListBox.innerHTML += `
+          <div style="background-color: var(--card-color); border: 1px solid var(--border-color); padding: 14px; border-radius: 8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
+              <span style="font-size:12px; font-weight:600; color: var(--primary-color);">${n.author || 'Officer'}</span>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-size:11px; color:var(--text-secondary); font-family:monospace;">${nDate}</span>
+                <button class="btn-primary" style="padding:2px 6px; font-size:10px; width:auto; background-color:var(--border-light);" onclick="editCaseNote(${n.id}, \`${(n.note || '').replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)"><i class="ri-edit-line"></i> Edit</button>
+                <button class="btn-primary" style="padding:2px 6px; font-size:10px; width:auto; background-color:var(--danger-color);" onclick="deleteCaseNote(${n.id}, '${target.id}')"><i class="ri-delete-bin-line"></i> Delete</button>
+              </div>
+            </div>
+            <p style="font-size:13px; color: #FFF; line-height: 1.5; margin: 0;">${n.note}</p>
+          </div>
+        `;
+      });
+    }
+  }
+
+  // 5. Forensic Reports Tab Content
+  const forensicListBox = document.getElementById('detail-forensic-list');
+  if (forensicListBox) {
+    forensicListBox.innerHTML = '';
+    const forensics = target.forensics || (window.CIB_DB.forensics || []).filter(f => f.caseId === target.id || f.caseId === target.firId);
+    if (forensics.length === 0) {
+      forensicListBox.innerHTML = '<span style="color:var(--text-secondary); font-size:13px;">No forensic analysis reports filed yet for this case.</span>';
+    } else {
+      forensics.forEach(f => {
+        const isApproved = f.status === 'Approved';
+        const isReturned = f.status === 'Returned for Revision';
+        const docLink = f.reportFileUrl ? `<a href="${f.reportFileUrl}" target="_blank" class="btn-primary" style="padding: 6px 12px; font-size: 11px; width: auto; background-color: var(--primary-color); display: inline-flex; align-items: center; gap: 4px;"><i class="ri-file-pdf-line"></i> Download Report PDF</a>` : '';
+
+        let actionsHTML = '';
+        if (activeRole === 'INSPECTOR' || activeRole === 'SUPER_ADMIN') {
+          if (!isApproved) {
+            actionsHTML = `
+              <div style="display:flex; gap:8px;">
+                <button class="btn-primary" style="padding:6px 12px; font-size:11px; width:auto; background-color:var(--success-color);" onclick="acceptForensicReport('${f.id}', '${target.id}')"><i class="ri-checkbox-circle-line"></i> Accept Report</button>
+                <button class="btn-primary" style="padding:6px 12px; font-size:11px; width:auto; background-color:var(--danger-color);" onclick="returnForensicReport('${f.id}', '${target.id}')"><i class="ri-reply-line"></i> Return Report</button>
+              </div>
+            `;
+          }
+        }
+
+        forensicListBox.innerHTML += `
+          <div style="background-color: var(--card-color); border: 1px solid var(--border-color); padding: 16px; border-radius: 8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <strong style="font-size:14px; color:#FFF;">${f.reportTitle || f.type}</strong>
+              <span class="badge ${isApproved ? 'badge-status-solved' : (isReturned ? 'priority-high' : 'priority-medium')}" style="font-size:11px; padding:2px 8px;">${f.status}</span>
+            </div>
+            <div style="font-size:12px; color:var(--text-secondary); margin-bottom:8px;">Analyst: <strong style="color:#FFF;">${f.analyst || 'Forensic Specialist'}</strong></div>
+            <div style="background-color:var(--surface-color); padding:10px; border-radius:6px; border:1px solid var(--border-color); font-size:12px; color:var(--text-secondary); line-height:1.5;">
+              <strong style="color:#FFF; display:block; margin-bottom:2px;">Laboratory Findings:</strong>
+              ${f.summary || 'No summary findings logged.'}
+              ${f.observations ? `<div style="margin-top:6px; border-top:1px dashed var(--border-color); padding-top:6px;"><strong style="color:#FFF;">Recommendations & Remarks:</strong> ${f.observations}</div>` : ''}
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px;">
+              ${docLink}
+              ${actionsHTML}
+            </div>
+          </div>
+        `;
+      });
+    }
+  }
+
+  // 6. Witness Tab Content
+  const witnessBox = document.getElementById('detail-witnesses');
+  if (witnessBox) {
+    witnessBox.innerHTML = '';
+    const witnessesList = target.witnesses || [];
+    if (witnessesList.length === 0) {
+      witnessBox.innerHTML = '<span style="color:var(--text-secondary); font-size:13px;">No witness statements recorded yet.</span>';
+    } else {
+      witnessesList.forEach(ws => {
+        witnessBox.innerHTML += `
+          <div style="margin-bottom:8px; border-bottom:1px solid var(--border-color); padding-bottom:8px;">
+            <strong style="font-size:13px; display:block; color:#FFF;">${ws.witness || ws.name}</strong>
+            <span style="font-size:12px; color:var(--text-secondary); line-height:1.4;">"${ws.statement || 'No statement recorded.'}"</span>
+          </div>
+        `;
+      });
+    }
   }
   
   switchDetailTab('overview');
@@ -4088,6 +4205,174 @@ function renderSubInspectorRegistries() {
   }
 }
 
+async function handleAddNoteSubmit(event) {
+  event.preventDefault();
+  const caseId = document.getElementById('detail-case-title')?.textContent?.split(' : ')[0]?.trim();
+  const noteInput = document.getElementById('case-note-input');
+  if (!caseId || !noteInput || !noteInput.value.trim()) return;
+
+  const token = sessionStorage.getItem('cib_jwt_token');
+  try {
+    const res = await fetch('/api/workflow/notes', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ caseId, note: noteInput.value.trim() })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      triggerToast("Investigation note saved to PostgreSQL.", "success");
+      noteInput.value = '';
+      await initDashboard();
+      openCaseDetail(caseId);
+    } else {
+      triggerToast(data.error || "Failed to save note.", "danger");
+    }
+  } catch (err) {
+    console.error(err);
+    triggerToast("Server connection error.", "danger");
+  }
+}
+
+async function editCaseNote(noteId, currentText) {
+  const newNote = prompt("Edit Investigation Note:", currentText);
+  if (newNote === null || !newNote.trim()) return;
+
+  const token = sessionStorage.getItem('cib_jwt_token');
+  try {
+    const res = await fetch(`/api/workflow/notes/${noteId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ note: newNote.trim() })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      triggerToast("Investigation note updated.", "success");
+      await initDashboard();
+      const activeCaseId = document.getElementById('detail-case-title')?.textContent?.split(' : ')[0]?.trim();
+      if (activeCaseId) openCaseDetail(activeCaseId);
+    } else {
+      triggerToast(data.error || "Failed to update note.", "danger");
+    }
+  } catch (err) {
+    console.error(err);
+    triggerToast("Server error.", "danger");
+  }
+}
+
+async function deleteCaseNote(noteId, caseId = '') {
+  if (!confirm("Are you sure you want to delete this investigation note?")) return;
+
+  const token = sessionStorage.getItem('cib_jwt_token');
+  try {
+    const res = await fetch(`/api/workflow/notes/${noteId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      triggerToast("Investigation note deleted.", "success");
+      await initDashboard();
+      const activeCaseId = caseId || document.getElementById('detail-case-title')?.textContent?.split(' : ')[0]?.trim();
+      if (activeCaseId) openCaseDetail(activeCaseId);
+    } else {
+      triggerToast(data.error || "Failed to delete note.", "danger");
+    }
+  } catch (err) {
+    console.error(err);
+    triggerToast("Server error.", "danger");
+  }
+}
+
+async function acceptForensicReport(reportId, caseId) {
+  if (!confirm(`Are you sure you want to ACCEPT Forensic Report ${reportId}?`)) return;
+
+  const token = sessionStorage.getItem('cib_jwt_token');
+  try {
+    const res = await fetch('/api/workflow/accept-forensic-report', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ reportId, caseId })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      triggerToast("Forensic Report accepted & evidence status verified.", "success");
+      await initDashboard();
+      openCaseDetail(caseId);
+    } else {
+      triggerToast(data.error || "Failed to accept report.", "danger");
+    }
+  } catch (err) {
+    console.error(err);
+    triggerToast("Server connection error.", "danger");
+  }
+}
+
+async function returnForensicReport(reportId, caseId) {
+  const remarks = prompt("Enter revision remarks/instructions for Forensic Specialist:");
+  if (remarks === null || !remarks.trim()) return;
+
+  const token = sessionStorage.getItem('cib_jwt_token');
+  try {
+    const res = await fetch('/api/workflow/return-forensic-report', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ reportId, caseId, remarks: remarks.trim() })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      triggerToast("Forensic Report returned for revision.", "success");
+      await initDashboard();
+      openCaseDetail(caseId);
+    } else {
+      triggerToast(data.error || "Failed to return report.", "danger");
+    }
+  } catch (err) {
+    console.error(err);
+    triggerToast("Server connection error.", "danger");
+  }
+}
+
+async function forwardCaseToSuperintendent(caseId) {
+  if (!confirm(`Are you sure you want to forward Case ${caseId} to Superintendent for final chargesheet review?`)) return;
+
+  const token = sessionStorage.getItem('cib_jwt_token');
+  try {
+    const res = await fetch('/api/workflow/complete-investigation', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ caseId })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      triggerToast("Investigation file forwarded to Superintendent for review.", "success");
+      await initDashboard();
+      openCaseDetail(caseId);
+    } else {
+      triggerToast(data.error || "Failed to forward case.", "danger");
+    }
+  } catch (err) {
+    console.error(err);
+    triggerToast("Server connection error.", "danger");
+  }
+}
+
 window.handleFirstLoginPasswordChangeSubmit = handleFirstLoginPasswordChangeSubmit;
 window.showNotificationCenter = showNotificationCenter;
 window.markAllNotificationsRead = markAllNotificationsRead;
@@ -4096,5 +4381,11 @@ window.paginateNotifications = paginateNotifications;
 window.deleteNotification = deleteNotification;
 window.renderDepartmentsRegistry = renderDepartmentsRegistry;
 window.renderSubInspectorRegistries = renderSubInspectorRegistries;
+window.handleAddNoteSubmit = handleAddNoteSubmit;
+window.editCaseNote = editCaseNote;
+window.deleteCaseNote = deleteCaseNote;
+window.acceptForensicReport = acceptForensicReport;
+window.returnForensicReport = returnForensicReport;
+window.forwardCaseToSuperintendent = forwardCaseToSuperintendent;
 
 
