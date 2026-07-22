@@ -224,6 +224,9 @@ router.post('/request-forensic', authenticateToken, authorizeRoles('SUPER_ADMIN'
   const { caseId } = req.body;
   const officerId = req.user.officerId;
 
+  console.log('[DEBUG WORKFLOW] Send to Forensics request body received by backend:', req.body);
+  console.log('[DEBUG WORKFLOW] Send to Forensics logged in officerId:', officerId);
+
   let targetCase = await prisma.case.findUnique({
     where: { id: caseId }
   });
@@ -274,6 +277,8 @@ router.post('/request-forensic', authenticateToken, authorizeRoles('SUPER_ADMIN'
   if (!targetCase) {
     throw new ApiError(404, 'Assigned case not found.');
   }
+
+  console.log('[DEBUG WORKFLOW] Send to Forensics resolved Case.id:', targetCase.id);
 
   const updatedCase = await prisma.case.update({
     where: { id: targetCase.id },

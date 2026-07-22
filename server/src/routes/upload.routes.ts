@@ -19,12 +19,15 @@ import crypto from 'crypto';
 const handleEvidenceUpload = async (req: any, res: any, next: any) => {
   try {
     const { caseId, category, title, remarks } = req.body;
+    const userRole = req.user.role;
+    const officerId = req.user.officerId;
+
+    console.log('[DEBUG WORKFLOW] request body received by backend:', req.body);
+    console.log('[DEBUG WORKFLOW] logged in officerId:', officerId);
+
     if (!caseId) {
       throw new ApiError(400, 'Missing target caseId or firId parameter.');
     }
-
-    const userRole = req.user.role;
-    const officerId = req.user.officerId;
 
     // Lookup target Case using database primary key id, firId, or CaseAssignmentHistory JOIN
     let caseRecord = await prisma.case.findUnique({
@@ -79,12 +82,16 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
     }
 
     const targetCaseId = caseRecord.id;
+    console.log('[DEBUG WORKFLOW] resolved Case.id:', targetCaseId);
 
     // Verify uploadedBy officer exists
     const officerUser = await prisma.user.findUnique({ where: { id: officerId } });
     if (!officerUser) {
       throw new ApiError(404, `Officer user ID "${officerId}" not found in database.`);
     }
+
+    let assignmentHistory = null;
+    let isAssignedCase = false;
 
     // Security Check for Evidence Upload Role-Based Access
     if (userRole === 'SUPER_ADMIN') {
@@ -96,13 +103,13 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
     }
 
     if (userRole === 'SUB_INSPECTOR' || userRole === 'INSPECTOR') {
-      const assignmentHistory = await prisma.caseAssignmentHistory.findFirst({
+      assignmentHistory = await prisma.caseAssignmentHistory.findFirst({
         where: {
           caseId: targetCaseId,
           officerId: officerId
         }
       });
-      const isAssignedCase = caseRecord.officerId === officerId || !!assignmentHistory;
+      isAssignedCase = caseRecord.officerId === officerId || !!assignmentHistory;
       const fir = await prisma.fir.findFirst({
         where: {
           OR: [
@@ -116,6 +123,23 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
       if (!isAssignedCase && !isAssignedFir) {
         throw new ApiError(403, `Security Clearance Denied: ${userRole} can only upload evidence for cases explicitly assigned to them.`);
       }
+    }
+
+    console.log('[DEBUG WORKFLOW] assignment lookup result:', { assignmentHistory, isAssignedCase });
+
+    // Upload file to Cloudinary
+    let cloudinaryResult: { secure_url: string; public_id: string; resource_type: string; format: string } | null = null;
+    try {
+      const fileBuffer = fs.readFileSync(req.file.path);
+      cloudinaryResult = await CloudinaryService.uploadFile(
+        fileBuffer,
+        req.file.originalname,
+        'evidence'
+      );
+      console.log('[DEBUG WORKFLOW] Cloudinary upload succeeded:', cloudinaryResult.secure_url);
+    } catch (cloudinaryErr: any) {
+      console.error('[DEBUG WORKFLOW] Cloudinary upload failed exact reason:', cloudinaryErr);
+      throw new ApiError(500, `Cloudinary Upload Failed: ${cloudinaryErr?.message || cloudinaryErr}`);
     }
 
     const localFileName = req.file.filename;
@@ -137,19 +161,19 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
         uploadedByOfficerId: officerId,
         fileSize: req.file.size,
         mimeType: req.file.mimetype,
-        remarks: remarks || 'Uploaded locally',
+        remarks: remarks || 'Uploaded via Cloudinary',
         chainOfCustodyStatus: `Secured in Vault by ${req.user.name} (${userRole})`,
         verificationStatus: 'Verified Integrity',
         previewType: req.file.mimetype.split('/')[0] || 'file',
-        previewData: localFileUrl,
-        cloudinaryPublicId: null,
-        cloudinaryUrl: localFileUrl,
-        cloudinaryFormat: null,
-        cloudinaryResourceType: null,
+        previewData: cloudinaryResult.secure_url,
+        cloudinaryPublicId: cloudinaryResult.public_id,
+        cloudinaryUrl: cloudinaryResult.secure_url,
+        cloudinaryFormat: cloudinaryResult.format,
+        cloudinaryResourceType: cloudinaryResult.resource_type,
         transfers: {
           create: [
             {
-              action: `Evidence Ingested & Uploaded (${req.file.originalname})`,
+              action: `Evidence Ingested & Uploaded to Cloudinary (${req.file.originalname})`,
               handler: `${req.user.name} (${userRole})`,
               date: new Date()
             }

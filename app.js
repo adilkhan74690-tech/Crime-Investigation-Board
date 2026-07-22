@@ -2869,7 +2869,22 @@ async function handleAssignInspectorSubmit(event) {
 }
 
 function showEvidenceUploadModal(caseId) {
-  document.getElementById('evidence-case-id').value = caseId;
+  const selectedCase = (window.CIB_DB.cases || []).find(c => c.id === caseId || c.firId === caseId)
+                    || (window.CIB_DB.firs || []).find(f => f.id === caseId);
+  console.log('[DEBUG WORKFLOW] selected case object:', selectedCase);
+
+  let actualCaseId = caseId;
+  if (selectedCase) {
+    if (selectedCase.linkedCaseId) actualCaseId = selectedCase.linkedCaseId;
+    else if (selectedCase.case?.id) actualCaseId = selectedCase.case.id;
+    else if (selectedCase.id && !selectedCase.isFir) actualCaseId = selectedCase.id;
+    else {
+      const match = (window.CIB_DB.cases || []).find(c => c.id === caseId || c.firId === caseId);
+      if (match) actualCaseId = match.id;
+    }
+  }
+
+  document.getElementById('evidence-case-id').value = actualCaseId;
   const titleInput = document.getElementById('evidence-title-input');
   if (titleInput) titleInput.value = '';
   const remarksInput = document.getElementById('evidence-remarks-input');
@@ -2934,6 +2949,8 @@ function initDragAndDropUpload() {
 function handleEvidenceUploadSubmit(event) {
   event.preventDefault();
   const caseId = document.getElementById('evidence-case-id').value;
+  console.log('[DEBUG WORKFLOW] caseId before FormData.append():', caseId);
+
   const fileInput = document.getElementById('evidence-file-input');
   const titleInput = document.getElementById('evidence-title-input');
   const category = document.getElementById('evidence-category-select').value;
@@ -3005,7 +3022,22 @@ function handleEvidenceUploadSubmit(event) {
 }
 
 function showRequestForensicModal(caseId) {
-  document.getElementById('forensic-case-id').value = caseId;
+  const selectedCase = (window.CIB_DB.cases || []).find(c => c.id === caseId || c.firId === caseId)
+                    || (window.CIB_DB.firs || []).find(f => f.id === caseId);
+  console.log('[DEBUG WORKFLOW] selected case object for forensics:', selectedCase);
+
+  let actualCaseId = caseId;
+  if (selectedCase) {
+    if (selectedCase.linkedCaseId) actualCaseId = selectedCase.linkedCaseId;
+    else if (selectedCase.case?.id) actualCaseId = selectedCase.case.id;
+    else if (selectedCase.id && !selectedCase.isFir) actualCaseId = selectedCase.id;
+    else {
+      const match = (window.CIB_DB.cases || []).find(c => c.id === caseId || c.firId === caseId);
+      if (match) actualCaseId = match.id;
+    }
+  }
+
+  document.getElementById('forensic-case-id').value = actualCaseId;
   document.getElementById('forensic-report-id').value = `FOR-2026-${Math.floor(100 + Math.random() * 900)}`;
   document.getElementById('forensic-summary-input').value = '';
   showModal('modal-request-forensic');
@@ -3014,6 +3046,7 @@ function showRequestForensicModal(caseId) {
 async function handleRequestForensicSubmit(event) {
   event.preventDefault();
   const caseId = document.getElementById('forensic-case-id').value;
+  console.log('[DEBUG WORKFLOW] forensic caseId before request:', caseId);
   const reportId = document.getElementById('forensic-report-id').value;
   const type = document.getElementById('forensic-type-select').value;
   const summary = document.getElementById('forensic-summary-input').value;
