@@ -655,7 +655,7 @@ button, input, select, textarea {
   height: 100vh;
 }
 
-.navbar {
+.navbar, .app-header {
   height: 64px;
   min-height: 64px;
   max-height: 64px;
@@ -666,6 +666,7 @@ button, input, select, textarea {
   justify-content: space-between;
   padding: 0 32px;
   flex-shrink: 0;
+  width: 100%;
 }
 
 .nav-left {
@@ -810,6 +811,16 @@ button, input, select, textarea {
 /* ---------------------------------------------------- */
 /* Workspace Layout Elements                           */
 /* ---------------------------------------------------- */
+.app-content {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
 .page-container {
   flex-grow: 1;
   padding: 24px 32px 32px 32px;
@@ -817,6 +828,7 @@ button, input, select, textarea {
   display: none;
   box-sizing: border-box;
   width: 100%;
+  height: 100%;
 }
 
 .page-container.active {
