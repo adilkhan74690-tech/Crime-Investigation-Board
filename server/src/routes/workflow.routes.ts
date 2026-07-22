@@ -280,6 +280,8 @@ router.post('/request-forensic', authenticateToken, authorizeRoles('SUPER_ADMIN'
 
   console.log('[DEBUG WORKFLOW] Send to Forensics resolved Case.id:', targetCase.id);
 
+  const { reportId, type, summary } = req.body;
+
   const updatedCase = await prisma.case.update({
     where: { id: targetCase.id },
     data: { status: 'UNDER_FORENSIC_REVIEW' }
@@ -296,9 +298,23 @@ router.post('/request-forensic', authenticateToken, authorizeRoles('SUPER_ADMIN'
     data: { status: 'UNDER_FORENSIC_REVIEW' }
   }).catch(console.error);
 
-  await logWorkflowAction(req, req.user.officerId, req.user.role, 'Sent to Forensics', `Case status updated to UNDER_FORENSIC_REVIEW.`, targetCase.id);
+  const forensicReportId = reportId || `FOR-2026-${Math.floor(100 + Math.random() * 900)}`;
+  const forensicReport = await prisma.forensicReport.create({
+    data: {
+      id: forensicReportId,
+      caseId: targetCase.id,
+      type: type || 'Digital Forensics',
+      analyst: 'Pending Assignment',
+      summary: summary || 'Forensic laboratory analysis requested by investigating officer.',
+      status: 'Pending Analysis'
+    }
+  }).catch((e: any) => console.log('[DEBUG WORKFLOW] Forensic report note:', e.message));
 
-  res.json(formatResponse(updatedCase, 'Case status updated to UNDER_FORENSIC_REVIEW.'));
+  console.log('[DEBUG WORKFLOW] Forensic report created:', forensicReportId);
+
+  await logWorkflowAction(req, req.user.officerId, req.user.role, 'Sent to Forensics', `Case status updated to UNDER_FORENSIC_REVIEW and forensic report ${forensicReportId} created.`, targetCase.id);
+
+  res.json(formatResponse({ case: updatedCase, forensicReport }, 'Case status updated to UNDER_FORENSIC_REVIEW and Forensic Report created successfully.'));
 }));
 
 // 5. Submit Forensic Findings (Forensic Officer)

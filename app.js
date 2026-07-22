@@ -2871,7 +2871,6 @@ async function handleAssignInspectorSubmit(event) {
 function showEvidenceUploadModal(caseId) {
   const selectedCase = (window.CIB_DB.cases || []).find(c => c.id === caseId || c.firId === caseId)
                     || (window.CIB_DB.firs || []).find(f => f.id === caseId);
-  console.log('[DEBUG WORKFLOW] selected case object:', selectedCase);
 
   let actualCaseId = caseId;
   if (selectedCase) {
@@ -2883,6 +2882,16 @@ function showEvidenceUploadModal(caseId) {
       if (match) actualCaseId = match.id;
     }
   }
+
+  console.log('[DEBUG WORKFLOW] Upload Evidence values:', {
+    passedParam: caseId,
+    selectedCaseObject: selectedCase,
+    'Case.id': actualCaseId,
+    'Case.caseNumber': selectedCase?.caseNumber || selectedCase?.id || null,
+    'FIR number': selectedCase?.firNumber || selectedCase?.firId || null,
+    'FIR id': selectedCase?.isFir ? selectedCase?.id : (selectedCase?.firId || null),
+    'Assignment id': selectedCase?.assignmentId || null
+  });
 
   document.getElementById('evidence-case-id').value = actualCaseId;
   const titleInput = document.getElementById('evidence-title-input');
@@ -3024,7 +3033,6 @@ function handleEvidenceUploadSubmit(event) {
 function showRequestForensicModal(caseId) {
   const selectedCase = (window.CIB_DB.cases || []).find(c => c.id === caseId || c.firId === caseId)
                     || (window.CIB_DB.firs || []).find(f => f.id === caseId);
-  console.log('[DEBUG WORKFLOW] selected case object for forensics:', selectedCase);
 
   let actualCaseId = caseId;
   if (selectedCase) {
@@ -3036,6 +3044,16 @@ function showRequestForensicModal(caseId) {
       if (match) actualCaseId = match.id;
     }
   }
+
+  console.log('[DEBUG WORKFLOW] Send to Forensics values:', {
+    passedParam: caseId,
+    selectedCaseObject: selectedCase,
+    'Case.id': actualCaseId,
+    'Case.caseNumber': selectedCase?.caseNumber || selectedCase?.id || null,
+    'FIR number': selectedCase?.firNumber || selectedCase?.firId || null,
+    'FIR id': selectedCase?.isFir ? selectedCase?.id : (selectedCase?.firId || null),
+    'Assignment id': selectedCase?.assignmentId || null
+  });
 
   document.getElementById('forensic-case-id').value = actualCaseId;
   document.getElementById('forensic-report-id').value = `FOR-2026-${Math.floor(100 + Math.random() * 900)}`;

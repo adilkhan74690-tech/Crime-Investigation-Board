@@ -20,10 +20,10 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
   try {
     const { caseId, category, title, remarks } = req.body;
     const userRole = req.user.role;
-    const officerId = req.user.officerId;
+    const jwtOfficerId = req.user.officerId;
 
-    console.log('[DEBUG WORKFLOW] request body received by backend:', req.body);
-    console.log('[DEBUG WORKFLOW] logged in officerId:', officerId);
+    console.log('[DEBUG WORKFLOW] JWT payload:', req.user);
+    console.log('[DEBUG WORKFLOW] received caseId:', caseId);
 
     if (!caseId) {
       throw new ApiError(400, 'Missing target caseId or firId parameter.');
@@ -48,7 +48,7 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
     if (!caseRecord) {
       const assignment = await prisma.caseAssignmentHistory.findFirst({
         where: {
-          officerId: officerId,
+          officerId: jwtOfficerId,
           OR: [
             { caseId: caseId },
             { id: caseId },
@@ -64,7 +64,7 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
 
     if (!caseRecord) {
       const userAssignments = await prisma.caseAssignmentHistory.findMany({
-        where: { officerId: officerId },
+        where: { officerId: jwtOfficerId },
         include: { case: true }
       });
       const matchedAssignment = userAssignments.find(
@@ -84,11 +84,27 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
     const targetCaseId = caseRecord.id;
     console.log('[DEBUG WORKFLOW] resolved Case.id:', targetCaseId);
 
-    // Verify uploadedBy officer exists
-    const officerUser = await prisma.user.findUnique({ where: { id: officerId } });
+    // Verify uploadedBy officer exists in User table
+    const officerUser = await prisma.user.findUnique({ where: { id: jwtOfficerId } });
     if (!officerUser) {
-      throw new ApiError(404, `Officer user ID "${officerId}" not found in database.`);
+      throw new ApiError(404, `Officer user ID "${jwtOfficerId}" not found in database.`);
     }
+
+    // Resolve Officer record ID from Officer table (if JWT contains User.id)
+    let officerRecord = await prisma.officer.findUnique({ where: { id: jwtOfficerId } });
+    if (!officerRecord) {
+      const userWithOfficer = await prisma.user.findUnique({
+        where: { id: jwtOfficerId },
+        include: { officer: true }
+      });
+      if (userWithOfficer && userWithOfficer.officer) {
+        officerRecord = userWithOfficer.officer;
+      }
+    }
+    const resolvedOfficerId = officerRecord ? officerRecord.id : jwtOfficerId;
+
+    console.log('[DEBUG WORKFLOW] logged in user id:', officerUser.id);
+    console.log('[DEBUG WORKFLOW] logged in officer id:', resolvedOfficerId);
 
     let assignmentHistory = null;
     let isAssignedCase = false;
@@ -106,10 +122,13 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
       assignmentHistory = await prisma.caseAssignmentHistory.findFirst({
         where: {
           caseId: targetCaseId,
-          officerId: officerId
+          officerId: resolvedOfficerId
         }
       });
-      isAssignedCase = caseRecord.officerId === officerId || !!assignmentHistory;
+
+      console.log('[DEBUG WORKFLOW] assignmentHistory query result:', assignmentHistory);
+
+      isAssignedCase = caseRecord.officerId === resolvedOfficerId || !!assignmentHistory;
       const fir = await prisma.fir.findFirst({
         where: {
           OR: [
@@ -118,7 +137,7 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
           ]
         }
       });
-      const isAssignedFir = fir && fir.officerId && fir.officerId === officerId;
+      const isAssignedFir = fir && fir.officerId && fir.officerId === resolvedOfficerId;
 
       if (!isAssignedCase && !isAssignedFir) {
         throw new ApiError(403, `Security Clearance Denied: ${userRole} can only upload evidence for cases explicitly assigned to them.`);
@@ -158,7 +177,7 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
         category: validCategory,
         collectionDate: new Date(),
         collectedBy: req.user.name,
-        uploadedByOfficerId: officerId,
+        uploadedByOfficerId: resolvedOfficerId,
         fileSize: req.file.size,
         mimeType: req.file.mimetype,
         remarks: remarks || 'Uploaded via Cloudinary',
@@ -206,7 +225,7 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
     }).catch((e) => console.error('[DEBUG UPLOAD FIR UPDATE ERROR]', e));
 
     // Audit Log & Notification
-    await logAudit(req, officerId, userRole, 'Evidence Uploaded', `Uploaded file ${req.file.originalname} for case ${caseRecord.id}`, caseRecord.id).catch(console.error);
+    await logAudit(req, resolvedOfficerId, userRole, 'Evidence Uploaded', `Uploaded file ${req.file.originalname} for case ${caseRecord.id}`, caseRecord.id).catch(console.error);
     await NotificationService.notifyAll(`Evidence uploaded for ${caseRecord.id}: "${title || req.file.originalname}" by ${req.user.name}.`, 'Info').catch(console.error);
 
     // Return final response
