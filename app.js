@@ -302,8 +302,11 @@ async function handleLogout() {
 }
 
 async function initDashboard() {
-  document.getElementById('auth-screen').style.display = 'none';
-  document.getElementById('app-workspace').style.display = 'flex';
+  const isInitialLoad = document.getElementById('app-workspace').style.display !== 'flex';
+  if (isInitialLoad) {
+    document.getElementById('auth-screen').style.display = 'flex';
+    document.getElementById('app-workspace').style.display = 'none';
+  }
   
   renderSkeletons('cases-table-body', 5, 8);
   renderSkeletons('io-cases-table-body', 5, 8);
@@ -415,9 +418,21 @@ async function initDashboard() {
   renderDepartmentsRegistry();
   renderSubInspectorRegistries();
   
-  // Switch to the first authorized view of the role
-  const firstView = ROLE_PERMISSIONS[activeRole][0];
-  switchView(firstView);
+  // Determine target view safely based on activeRole permissions
+  const allowedViews = ROLE_PERMISSIONS[activeRole] || ['sa-dashboard'];
+  let targetView = currentActiveView;
+  if (!targetView || !allowedViews.includes(targetView)) {
+    targetView = allowedViews[0];
+  }
+  
+  // Switch to the target view BEFORE displaying app workspace
+  switchView(targetView);
+  
+  // Now safely hide loading/auth screen and display the app workspace
+  if (isInitialLoad) {
+    document.getElementById('auth-screen').style.display = 'none';
+    document.getElementById('app-workspace').style.display = 'flex';
+  }
   
   triggerToast(`System Dashboard Synchronized as ${activeRole}.`, "success");
 }
