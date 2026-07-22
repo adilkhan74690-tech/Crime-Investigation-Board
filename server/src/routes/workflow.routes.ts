@@ -184,7 +184,7 @@ async function ensureCaseNotClosed(caseId: string) {
   const targetCase = await prisma.case.findFirst({
     where: { OR: [{ id: caseId }, { firId: caseId }] }
   });
-  if (targetCase && (targetCase.status === 'CLOSED' || (targetCase as any).status === 'Closed' || (targetCase as any).status === 'Solved')) {
+  if (targetCase && (targetCase.status === 'CLOSED' || targetCase.status === 'Solved')) {
     throw new ApiError(400, `Cannot modify CLOSED Case "${targetCase.id}". Case file is locked in permanent read-only status.`);
   }
 }

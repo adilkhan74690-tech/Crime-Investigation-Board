@@ -60,7 +60,7 @@ export class CaseController {
       });
     }
     const formatted = list.map((c: any) => {
-      const isClosed = c.status === 'CLOSED' || c.status === 'Closed' || c.status === 'Solved';
+      const isClosed = c.status === 'CLOSED' || c.status === 'Solved';
       const hasForensic = c.forensics && c.forensics.length > 0;
       const isUnderForensicReview = !isClosed && (c.status === 'UNDER_FORENSIC_REVIEW' || (c.fir && c.fir.status === 'UNDER_FORENSIC_REVIEW'));
       
@@ -133,7 +133,7 @@ export class CaseController {
       throw new ApiError(404, 'Case record not found.');
     }
 
-    const isClosed = item.status === 'CLOSED' || item.status === 'Closed' || item.status === 'Solved';
+    const isClosed = item.status === 'CLOSED' || item.status === 'Solved';
     const hasForensic = item.forensics && item.forensics.length > 0;
     const isUnderForensicReview = !isClosed && (item.status === 'UNDER_FORENSIC_REVIEW' || (item.fir && item.fir.status === 'UNDER_FORENSIC_REVIEW'));
     if (isClosed) {
@@ -152,7 +152,7 @@ export class CaseController {
       throw new ApiError(404, 'Case record not found.');
     }
 
-    if (existingCase.status === 'CLOSED' || (existingCase as any).status === 'Closed' || (existingCase as any).status === 'Solved') {
+    if (existingCase.status === 'CLOSED' || existingCase.status === 'Solved') {
       throw new ApiError(400, 'Cannot delete a CLOSED case file. Closed cases are locked permanently for audit and history compliance.');
     }
 

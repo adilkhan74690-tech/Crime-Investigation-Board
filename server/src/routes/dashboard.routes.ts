@@ -139,11 +139,11 @@ router.get('/dashboard-payload', authenticateToken, asyncHandler(async (req: any
   });
 
   const activeCasesCount = await prisma.case.count({
-    where: { status: { notIn: ['CLOSED', 'Closed', 'Solved'] as any } }
+    where: { status: { notIn: ['CLOSED', 'Solved'] } }
   });
 
   const solvedCasesCount = await prisma.case.count({
-    where: { status: { in: ['CLOSED', 'Closed', 'Solved'] as any } }
+    where: { status: { in: ['CLOSED', 'Solved'] } }
   });
 
   const totalFirsCount = await prisma.fir.count();
@@ -212,8 +212,8 @@ router.get('/dashboard-payload', authenticateToken, asyncHandler(async (req: any
 // Endpoint: Comprehensive Real-Time Analytics computed strictly from PostgreSQL
 router.get('/analytics', authenticateToken, asyncHandler(async (req: any, res: any) => {
   const totalFirRegistered = await prisma.fir.count();
-  const totalActiveCases = await prisma.case.count({ where: { status: { notIn: ['CLOSED', 'Closed', 'Solved'] as any } } });
-  const totalClosedCases = await prisma.case.count({ where: { status: { in: ['CLOSED', 'Closed', 'Solved'] as any } } });
+  const totalActiveCases = await prisma.case.count({ where: { status: { notIn: ['CLOSED', 'Solved'] } } });
+  const totalClosedCases = await prisma.case.count({ where: { status: { in: ['CLOSED', 'Solved'] } } });
   const totalPendingInvestigation = await prisma.fir.count({ where: { status: { in: ['Registered', 'Assigned to SI'] } } });
   const casesUnderForensic = await prisma.fir.count({ where: { status: { in: ['Sent to Forensics', 'Under Forensic Review', 'Forensic Report Submitted'] } } });
   const evidenceUploaded = await prisma.evidence.count();
