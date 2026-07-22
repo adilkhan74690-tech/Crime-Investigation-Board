@@ -1163,8 +1163,8 @@ Select a target investigation case and click a report type above to generate rea
             <thead>
               <tr><th>Case ID</th><th>Subject</th><th>Note Content</th></tr>
             </thead>
-            <tbody>
-              <tr><td>CASE-2026-081</td><td>Cody Fisher Interview</td><td>Suspect claims alibi for night of robbery. Under review.</td></tr>
+            <tbody id="io-notes-tbody">
+              <!-- Rendered dynamically -->
             </tbody>
           </table>
         </div>
@@ -1183,8 +1183,8 @@ Select a target investigation case and click a report type above to generate rea
             <thead>
               <tr><th>Request ID</th><th>Case ID</th><th>Analysis Type</th><th>Status</th></tr>
             </thead>
-            <tbody>
-              <tr><td>FOR-2026-081</td><td>CASE-2026-081</td><td>Fingerprint Verification</td><td><span class="badge" style="background-color: var(--warning-color); color: #000;">Pending Analyst</span></td></tr>
+            <tbody id="io-forensics-tbody">
+              <!-- Rendered dynamically -->
             </tbody>
           </table>
         </div>
@@ -1202,13 +1202,13 @@ Select a target investigation case and click a report type above to generate rea
           <div class="stat-card">
             <div class="stat-info">
               <span class="stat-label">Pending Lab Requests</span>
-              <span class="stat-val" id="fo-pending-requests">4</span>
+              <span class="stat-val" id="fo-pending-requests">0</span>
             </div>
           </div>
           <div class="stat-card solved">
             <div class="stat-info">
               <span class="stat-label">Completed DNA Profiles</span>
-              <span class="stat-val" id="fo-completed-profiles">19</span>
+              <span class="stat-val" id="fo-completed-profiles">0</span>
             </div>
           </div>
         </div>
@@ -1269,13 +1269,13 @@ Select a target investigation case and click a report type above to generate rea
           <div class="stat-card">
             <div class="stat-info">
               <span class="stat-label">Awaiting Case Review</span>
-              <span class="stat-val" id="sp-awaiting-review">2</span>
+              <span class="stat-val" id="sp-awaiting-review">0</span>
             </div>
           </div>
           <div class="stat-card solved">
             <div class="stat-info">
               <span class="stat-label">Solved Division Cases</span>
-              <span class="stat-val" id="sp-solved-cases">24</span>
+              <span class="stat-val" id="sp-solved-cases">0</span>
             </div>
           </div>
         </div>
@@ -1294,8 +1294,8 @@ Select a target investigation case and click a report type above to generate rea
             <thead>
               <tr><th>Approval ID</th><th>Description</th><th>Case Reference</th><th>Action</th></tr>
             </thead>
-            <tbody>
-              <tr><td>APP-009</td><td>Approve Forensic findings for report FOR-2026-081</td><td>CASE-2026-081</td><td><button class="btn-primary" style="width:auto; padding:6px 12px; font-size:12px;" onclick="triggerToast('Findings Approved.', 'success')">Approve</button></td></tr>
+            <tbody id="sp-approvals-tbody">
+              <!-- Rendered dynamically -->
             </tbody>
           </table>
         </div>
@@ -1314,8 +1314,8 @@ Select a target investigation case and click a report type above to generate rea
             <thead>
               <tr><th>Case ID</th><th>Title</th><th>Current Officer</th><th>Action</th></tr>
             </thead>
-            <tbody>
-              <tr><td>CASE-2026-081</td><td>Midnight Syndicate Heist</td><td>Unassigned</td><td><button class="btn-primary" style="width:auto; padding:6px 12px; font-size:12px;" onclick="showAssignInspectorModal('CASE-2026-081')">Assign Officer</button></td></tr>
+            <tbody id="sp-assign-officers-tbody">
+              <!-- Rendered dynamically -->
             </tbody>
           </table>
         </div>
@@ -1334,8 +1334,8 @@ Select a target investigation case and click a report type above to generate rea
             <thead>
               <tr><th>Report ID</th><th>Case Reference</th><th>Biometric Type</th><th>Status</th></tr>
             </thead>
-            <tbody>
-              <tr><td>FOR-2026-081</td><td>CASE-2026-081</td><td>Fingerprint Scan</td><td><span class="badge" style="background-color: var(--warning-color); color: #000;">Pending Approval</span></td></tr>
+            <tbody id="sp-assign-forensics-tbody">
+              <!-- Rendered dynamically -->
             </tbody>
           </table>
         </div>

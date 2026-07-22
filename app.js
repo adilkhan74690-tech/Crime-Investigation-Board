@@ -9,6 +9,7 @@ window.CIB_DB = {
   recentActivities: [],
   firs: []
 };
+window.selectedCase = null;
 let currentActiveView = 'sa-dashboard';
 let sidebarCollapsed = false;
 let trendChart = null;
@@ -1187,6 +1188,9 @@ function openCaseDetail(caseId) {
   const target = (window.CIB_DB.cases || []).find(c => c.id === caseId || c.firId === caseId);
   if (!target) return;
   
+  // Store selectedCase globally for the Inspector investigation workflow
+  window.selectedCase = target;
+
   const boxDetails = document.getElementById('case-details-section');
   if (!boxDetails) return;
   boxDetails.style.display = 'block';
@@ -1481,10 +1485,30 @@ function renderEvidenceGrid() {
   if (!container) return;
   container.innerHTML = '';
 
-  const filteredEvidences = window.CIB_DB.evidence || [];
+  // Inspector investigation workflow: Require selectedCase
+  if (activeRole === 'INSPECTOR' && !window.selectedCase) {
+    container.innerHTML = `
+      <div style="grid-column: 1/-1; padding: 48px 24px; text-align: center; color: var(--text-secondary); background: var(--surface-color); border-radius: var(--radius-lg); border: 1px solid var(--border-color);">
+        <i class="ri-folder-shield-2-line" style="font-size: 44px; color: var(--text-secondary); margin-bottom: 12px; display: inline-block;"></i>
+        <h3 style="font-size: 16px; font-weight: 700; color: #FFF; margin-bottom: 8px;">No Active Case Selected</h3>
+        <p style="font-size: 13px; margin-bottom: 20px; max-width: 420px; margin-left: auto; margin-right: auto; line-height: 1.5;">Please select an assigned case from your cases list to view and manage its digital evidence artifacts.</p>
+        <button class="btn-primary" style="width: auto; padding: 8px 20px; font-size: 12px;" onclick="switchView('io-cases')"><i class="ri-folder-shield-2-line"></i> Select from Assigned Cases</button>
+      </div>
+    `;
+    return;
+  }
+
+  let filteredEvidences = window.CIB_DB.evidence || [];
+  if (window.selectedCase) {
+    const scId = window.selectedCase.id;
+    const scFirId = window.selectedCase.firId;
+    filteredEvidences = filteredEvidences.filter(e => 
+      e.caseId === scId || e.caseId === scFirId || e.caseNumber === scId || (window.selectedCase.caseNumber && e.caseNumber === window.selectedCase.caseNumber)
+    );
+  }
 
   if (filteredEvidences.length === 0) {
-    container.innerHTML = `<div style="grid-column: 1/-1; padding: 24px; text-align: center; color: var(--text-secondary); background: var(--surface-color); border-radius: var(--radius-md); border: 1px dashed var(--border-color);">No evidence artifacts available under your security clearance.</div>`;
+    container.innerHTML = `<div style="grid-column: 1/-1; padding: 24px; text-align: center; color: var(--text-secondary); background: var(--surface-color); border-radius: var(--radius-md); border: 1px dashed var(--border-color);">No evidence artifacts registered under ${window.selectedCase ? `Case ${window.selectedCase.id}` : 'your security clearance'}.</div>`;
     return;
   }
 
@@ -1690,18 +1714,24 @@ function previewEvidence(evId) {
 // Timeline Case selector & tracing
 function renderTimelineView() {
   const selectBody = document.getElementById('timeline-case-selector');
-  if (!selectBody) return;
-  selectBody.innerHTML = '';
-  
-  window.CIB_DB.cases.forEach(c => {
-    const row = document.createElement('tr');
-    row.innerHTML = `
-      <td><strong>${c.id}</strong></td>
-      <td>${c.title}</td>
-      <td><button class="btn-primary" style="padding:6px 12px; font-size:12px; width:auto;" onclick="loadTimelineForCase('${c.id}')">Trace</button></td>
-    `;
-    selectBody.appendChild(row);
-  });
+  if (selectBody) {
+    selectBody.innerHTML = '';
+    window.CIB_DB.cases.forEach(c => {
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td><strong>${c.id}</strong></td>
+        <td>${c.title}</td>
+        <td><button class="btn-primary" style="padding:6px 12px; font-size:12px; width:auto;" onclick="loadTimelineForCase('${c.id}')">Trace</button></td>
+      `;
+      selectBody.appendChild(row);
+    });
+  }
+
+  if (window.selectedCase) {
+    loadTimelineForCase(window.selectedCase.id);
+  } else if (window.CIB_DB.cases && window.CIB_DB.cases.length > 0) {
+    loadTimelineForCase(window.CIB_DB.cases[0].id);
+  }
 }
 
 function buildDynamicTimeline(target) {
@@ -1855,6 +1885,62 @@ function loadTimelineForCase(caseId) {
 
 // Forensics Lab Reports list & assigned evidence queue handler
 function renderForensicsLab() {
+  // Populate Inspector's forensic requests table (io-forensics-tbody)
+  const ioTbody = document.getElementById('io-forensics-tbody');
+  if (ioTbody) {
+    ioTbody.innerHTML = '';
+    let ioForensics = window.CIB_DB.forensics || [];
+    if (window.selectedCase) {
+      ioForensics = ioForensics.filter(f => f.caseId === window.selectedCase.id || f.caseId === window.selectedCase.firId);
+    }
+    if (ioForensics.length === 0) {
+      ioTbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-secondary); padding: 24px;">No forensic requests logged for ${window.selectedCase ? `Case ${window.selectedCase.id}` : 'assigned cases'}.</td></tr>`;
+    } else {
+      ioForensics.forEach(f => {
+        const tr = document.createElement('tr');
+        const statusBadge = f.status === 'Approved' || f.status === 'Forensic Report Submitted'
+          ? `<span class="badge badge-status-solved" style="font-size:11px; padding:2px 8px;">${f.status}</span>`
+          : `<span class="badge priority-medium" style="font-size:11px; padding:2px 8px;">${f.status || 'Pending Analyst'}</span>`;
+        tr.innerHTML = `
+          <td><strong style="color:#FFF;">${f.id}</strong></td>
+          <td><strong style="color:var(--primary-color);">${f.caseId}</strong></td>
+          <td>${f.type || f.reportTitle || 'Forensic Testing'}</td>
+          <td>${statusBadge}</td>
+        `;
+        ioTbody.appendChild(tr);
+      });
+    }
+  }
+
+  // Populate Inspector's classified notes table (io-notes-tbody)
+  const notesTbody = document.getElementById('io-notes-tbody');
+  if (notesTbody) {
+    notesTbody.innerHTML = '';
+    let caseNotes = [];
+    if (window.selectedCase && window.selectedCase.notes) {
+      caseNotes = window.selectedCase.notes.map(n => ({ ...n, caseId: window.selectedCase.id }));
+    } else {
+      window.CIB_DB.cases.forEach(c => {
+        if (c.notes) {
+          c.notes.forEach(n => caseNotes.push({ ...n, caseId: c.id }));
+        }
+      });
+    }
+    if (caseNotes.length === 0) {
+      notesTbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-secondary); padding: 24px;">No classified notes logged for ${window.selectedCase ? `Case ${window.selectedCase.id}` : 'assigned cases'}.</td></tr>`;
+    } else {
+      caseNotes.forEach(n => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><strong style="color:var(--primary-color);">${n.caseId || 'N/A'}</strong></td>
+          <td><strong style="color:#FFF;">${n.subject || n.title || 'Investigator Note'}</strong></td>
+          <td>${n.content || n.note || 'N/A'}</td>
+        `;
+        notesTbody.appendChild(tr);
+      });
+    }
+  }
+
   // 1. Populate Assigned Evidence & Requests Table (fo-pending-tbody)
   const tbody = document.getElementById('fo-pending-tbody');
   if (tbody) {
@@ -3909,6 +3995,30 @@ async function deleteEvidenceRecord(evidenceId, caseId = '') {
   }
 }
 
+async function refreshInspectorWorkflowData(caseId) {
+  // 1. Refresh dashboard payload from backend & update memory cache
+  await initDashboard();
+
+  // 2. Refresh Assigned Cases
+  renderCasesTable();
+
+  // 3. Update global selectedCase reference
+  if (caseId) {
+    const updated = (window.CIB_DB.cases || []).find(c => c.id === caseId || c.firId === caseId);
+    if (updated) {
+      window.selectedCase = updated;
+    }
+  }
+
+  // 4. Sequentially refresh Timeline, Evidence, Forensics, and details for selectedCase
+  if (window.selectedCase) {
+    renderTimelineView();
+    renderEvidenceGrid();
+    renderForensicsLab();
+    openCaseDetail(window.selectedCase.id);
+  }
+}
+
 function showReviewCaseModal(caseId) {
   document.getElementById('review-case-id').value = caseId;
   document.getElementById('review-notes-input').value = '';
@@ -3936,8 +4046,7 @@ async function handleReviewCaseSubmit(event) {
     if (response.ok && result.success) {
       triggerToast("Case review remarks recorded in timeline.", "success");
       hideModal('modal-review-case');
-      await initDashboard();
-      openCaseDetail(caseId);
+      await refreshInspectorWorkflowData(caseId);
     } else {
       triggerToast(result.error || "Failed to submit review.", "danger");
     }
@@ -4741,8 +4850,7 @@ async function forwardCaseToSuperintendent(caseId) {
     const data = await res.json();
     if (res.ok && data.success) {
       triggerToast("Investigation file forwarded to Superintendent for review.", "success");
-      await initDashboard();
-      openCaseDetail(caseId);
+      await refreshInspectorWorkflowData(caseId);
     } else {
       triggerToast(data.error || "Failed to forward case.", "danger");
     }
@@ -4768,8 +4876,7 @@ async function spApproveCase(caseId) {
     const data = await res.json();
     if (res.ok && data.success) {
       triggerToast(data.message || "Superintendent approval granted.", "success");
-      await initDashboard();
-      openCaseDetail(caseId);
+      await refreshInspectorWorkflowData(caseId);
     } else {
       triggerToast(data.error || "Approval failed.", "danger");
     }
@@ -4796,8 +4903,7 @@ async function spRequestChanges(caseId) {
     const data = await res.json();
     if (res.ok && data.success) {
       triggerToast("Change request sent to investigating officer.", "success");
-      await initDashboard();
-      openCaseDetail(caseId);
+      await refreshInspectorWorkflowData(caseId);
     } else {
       triggerToast(data.error || "Failed to request changes.", "danger");
     }
@@ -4824,8 +4930,7 @@ async function spRejectCase(caseId) {
     const data = await res.json();
     if (res.ok && data.success) {
       triggerToast("Case investigation rejected by Superintendent.", "success");
-      await initDashboard();
-      openCaseDetail(caseId);
+      await refreshInspectorWorkflowData(caseId);
     } else {
       triggerToast(data.error || "Rejection failed.", "danger");
     }
