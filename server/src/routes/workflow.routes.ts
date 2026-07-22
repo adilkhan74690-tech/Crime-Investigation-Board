@@ -273,9 +273,9 @@ async function handleApproveChargesheet(req: any, res: any) {
   if (!targetCase) throw new ApiError(404, `Case file ${caseId} not found in database.`);
 
   const currentStatus = targetCase.status;
-  const newStatus = 'FORENSIC_APPROVED';
+  const newStatus = 'CLOSED';
 
-  // 1. Update Case Status in PostgreSQL
+  // 1. Update Case Status in PostgreSQL using valid CaseStatus enum value CLOSED
   const updatedCase = await prisma.case.update({
     where: { id: targetCase.id },
     data: { status: newStatus as any }
@@ -285,7 +285,7 @@ async function handleApproveChargesheet(req: any, res: any) {
   if (targetCase.firId || targetCase.id) {
     await prisma.fir.updateMany({
       where: { OR: [{ id: targetCase.id }, ...(targetCase.firId ? [{ id: targetCase.firId }] : [])] },
-      data: { status: newStatus }
+      data: { status: 'Closed' }
     }).catch(console.error);
   }
 
@@ -323,12 +323,12 @@ router.post('/sp/reject', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SUPE
 
   const updatedCase = await prisma.case.update({
     where: { id: targetCase.id },
-    data: { status: 'Active' }
+    data: { status: 'REJECTED_BY_SP' }
   });
 
   await prisma.fir.updateMany({
     where: { OR: [{ id: targetCase.id }, ...(targetCase.firId ? [{ id: targetCase.firId }] : [])] },
-    data: { status: 'Active' }
+    data: { status: 'Rejected by SP' }
   }).catch(console.error);
 
   await prisma.timeline.create({
@@ -358,7 +358,7 @@ router.post('/sp/request-changes', authenticateToken, authorizeRoles('SUPER_ADMI
 
   const updatedCase = await prisma.case.update({
     where: { id: targetCase.id },
-    data: { status: 'Active' }
+    data: { status: 'ADDITIONAL_INVESTIGATION_REQUIRED' }
   });
 
   await prisma.timeline.create({
