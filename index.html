@@ -1350,10 +1350,10 @@ Select a target investigation case and click a report type above to generate rea
         <div class="chart-card">
           <table class="enterprise-table">
             <thead>
-              <tr><th>Case ID</th><th>Case Subject</th><th>Action</th></tr>
+              <tr><th>Case ID</th><th>Title</th><th>Crime Type</th><th>Priority</th><th>Status</th><th>Action</th></tr>
             </thead>
-            <tbody>
-              <tr><td>CASE-2026-081</td><td>Midnight Syndicate Heist</td><td><button class="btn-primary" style="width:auto; padding:6px 12px; font-size:12px; background-color:var(--warning-color);" onclick="showReviewCaseModal('CASE-2026-081')">Review Files</button></td></tr>
+            <tbody id="sp-review-cases-tbody">
+              <tr><td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 20px;">Loading assigned cases...</td></tr>
             </tbody>
           </table>
         </div>
@@ -1370,10 +1370,10 @@ Select a target investigation case and click a report type above to generate rea
         <div class="chart-card">
           <table class="enterprise-table">
             <thead>
-              <tr><th>Draft ID</th><th>Subject Target</th><th>Related Case</th><th>Action</th></tr>
+              <tr><th>Case ID</th><th>Title</th><th>Assigned Officer</th><th>Status</th><th>Actions</th></tr>
             </thead>
-            <tbody>
-              <tr><td>CHG-701</td><td>Cody Fisher</td><td>CASE-2026-081</td><td><button class="btn-primary" style="width:auto; padding:6px 12px; font-size:12px; background-color:var(--success-color);" onclick="approveChargesheet('CASE-2026-081')">Approve & Close Case</button></td></tr>
+            <tbody id="sp-chargesheet-tbody">
+              <tr><td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 20px;">Loading chargesheet ready cases...</td></tr>
             </tbody>
           </table>
         </div>
@@ -1392,8 +1392,8 @@ Select a target investigation case and click a report type above to generate rea
             <thead>
               <tr><th>Case ID</th><th>Subject</th><th>Closure Date</th><th>Final Status</th></tr>
             </thead>
-            <tbody>
-              <tr><td>CASE-2026-102</td><td>Holloway Warehouse Homicide</td><td>2026-07-18</td><td><span class="badge badge-status-solved">Solved</span></td></tr>
+            <tbody id="sp-close-cases-tbody">
+              <tr><td colspan="4" style="text-align: center; color: var(--text-secondary); padding: 20px;">Loading archived cases...</td></tr>
             </tbody>
           </table>
         </div>
@@ -2036,26 +2036,112 @@ Select a target investigation case and click a report type above to generate rea
     </div>
   </div>
 
-  <!-- Review Case Modal -->
+  <!-- Superintendent & Super Admin Case Review Workspace Modal -->
   <div id="modal-review-case" class="modal-overlay">
-    <div class="modal-container">
-      <div class="modal-header">
-        <h3 class="modal-title"><i class="ri-survey-line"></i> Superintendent Case Review</h3>
-        <button class="modal-close-btn" onclick="hideModal('modal-review-case')"><i class="ri-close-line"></i></button>
-      </div>
-      <form id="review-case-form" onsubmit="handleReviewCaseSubmit(event)">
-        <input type="hidden" id="review-case-id">
-        <div class="modal-body" style="display: flex; flex-direction: column; gap: 16px;">
-          <div class="form-group">
-            <label class="form-label" for="review-notes-input">Superintendent Review Notes</label>
-            <textarea id="review-notes-input" class="form-input" style="width: 100%; padding: 10px; height: 120px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px; resize: none;" placeholder="Log your official case review notes..." required></textarea>
+    <div class="modal-container" style="max-width: 960px; width: 95%; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; padding: 0; border-radius: 12px; background-color: var(--card-color); border: 1px solid var(--border-color);">
+      <!-- Modal Header -->
+      <div class="modal-header" style="padding: 16px 24px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background-color: var(--surface-color);">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div style="width: 36px; height: 36px; border-radius: 8px; background-color: rgba(245, 158, 11, 0.15); color: var(--warning-color); display: flex; align-items: center; justify-content: center; font-size: 20px;">
+            <i class="ri-survey-line"></i>
+          </div>
+          <div>
+            <h3 class="modal-title" id="review-workspace-title" style="font-size: 16px; font-weight: 700; color: #FFF; margin: 0;">Case Review Workspace</h3>
+            <span id="review-workspace-subtitle" style="font-size: 12px; color: var(--text-secondary);">Comprehensive Case File & Findings Inspection</span>
           </div>
         </div>
-        <div class="modal-footer">
-          <button type="button" class="btn-primary" style="background-color: transparent; border: 1px solid var(--border-light); color: var(--text-primary); width: auto;" onclick="hideModal('modal-review-case')">Cancel</button>
-          <button type="submit" class="btn-primary" style="width: auto;">Log Review</button>
+        <button class="modal-close-btn" onclick="hideModal('modal-review-case')" style="background: none; border: none; color: var(--text-secondary); font-size: 20px; cursor: pointer;"><i class="ri-close-line"></i></button>
+      </div>
+
+      <!-- Modal Body (Scrollable Workspace) -->
+      <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 20px;">
+        
+        <!-- Case Summary Header Card -->
+        <div id="review-case-summary-card" style="background-color: var(--surface-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; font-size: 12px;">
+          <div><strong style="color:var(--text-secondary);">Case ID:</strong> <div id="rv-case-id" style="font-size: 14px; font-weight: 700; color: var(--primary-color); font-family: monospace;">Loading...</div></div>
+          <div><strong style="color:var(--text-secondary);">Priority:</strong> <div id="rv-case-priority">Loading...</div></div>
+          <div><strong style="color:var(--text-secondary);">Status:</strong> <div id="rv-case-status">Loading...</div></div>
+          <div><strong style="color:var(--text-secondary);">Assigned Officer:</strong> <div id="rv-case-officer" style="color: #FFF; font-weight: 600;">Loading...</div></div>
         </div>
-      </form>
+
+        <!-- Section 1: FIR & Incident Summary -->
+        <div style="background-color: var(--surface-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px;">
+          <h4 style="font-size: 13px; font-weight: 700; color: var(--primary-color); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+            <i class="ri-file-shield-line"></i> 1. First Information Report (FIR) & Incident Details
+          </h4>
+          <div id="rv-fir-details" style="font-size: 12px; color: var(--text-secondary); line-height: 1.6;">
+            Loading FIR data...
+          </div>
+        </div>
+
+        <!-- Section 2: Evidence Vault -->
+        <div style="background-color: var(--surface-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px;">
+          <h4 style="font-size: 13px; font-weight: 700; color: var(--warning-color); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+            <i class="ri-bubble-chart-line"></i> 2. Evidence Vault & Chain of Custody
+          </h4>
+          <div id="rv-evidence-container" style="overflow-x: auto;">
+            Loading evidence files...
+          </div>
+        </div>
+
+        <!-- Section 3: Forensic Lab Reports -->
+        <div style="background-color: var(--surface-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px;">
+          <h4 style="font-size: 13px; font-weight: 700; color: #3B82F6; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+            <i class="ri-microscope-line"></i> 3. Forensic Analysis Reports & Biometrics
+          </h4>
+          <div id="rv-forensics-container" style="overflow-x: auto;">
+            Loading forensic reports...
+          </div>
+        </div>
+
+        <!-- Section 4 & 5: Timeline & Witness Statements -->
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+          <div style="background-color: var(--surface-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px;">
+            <h4 style="font-size: 13px; font-weight: 700; color: var(--success-color); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+              <i class="ri-git-commit-line"></i> 4. Case Timeline
+            </h4>
+            <div id="rv-timeline-container" style="max-height: 220px; overflow-y: auto; font-size: 12px;">
+              Loading timeline...
+            </div>
+          </div>
+          <div style="background-color: var(--surface-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px;">
+            <h4 style="font-size: 13px; font-weight: 700; color: #A855F7; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+              <i class="ri-chat-note-line"></i> 5. Witness Statements & Case Notes
+            </h4>
+            <div id="rv-notes-container" style="max-height: 220px; overflow-y: auto; font-size: 12px;">
+              Loading notes...
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 6: Official Review Notes & Action Decision -->
+        <div style="background-color: rgba(37, 99, 235, 0.05); border: 1px solid rgba(37, 99, 235, 0.2); border-radius: 8px; padding: 16px;">
+          <h4 style="font-size: 13px; font-weight: 700; color: #FFF; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+            <i class="ri-quill-pen-line"></i> 6. Official Review Notes & Superintendent Directives
+          </h4>
+          <input type="hidden" id="review-case-id">
+          <div class="form-group" style="margin-bottom: 16px;">
+            <label class="form-label" for="review-notes-input" style="font-size: 12px; color: var(--text-secondary);">Logged Directives & Review Remarks</label>
+            <textarea id="review-notes-input" class="form-input" style="width: 100%; padding: 12px; height: 90px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px; resize: vertical; font-size: 13px;" placeholder="Type official review directives, legal observations, or instructions..." required></textarea>
+          </div>
+
+          <div style="display: flex; gap: 12px; justify-content: flex-end; flex-wrap: wrap;">
+            <button type="button" class="btn-primary" style="width: auto; padding: 10px 18px; font-size: 12px; background-color: var(--success-color);" onclick="submitSpDecision('approve')">
+              <i class="ri-checkbox-circle-line"></i> Approve Case / Chargesheet
+            </button>
+            <button type="button" class="btn-primary" style="width: auto; padding: 10px 18px; font-size: 12px; background-color: var(--warning-color);" onclick="submitSpDecision('request-changes')">
+              <i class="ri-edit-line"></i> Request Changes
+            </button>
+            <button type="button" class="btn-primary" style="width: auto; padding: 10px 18px; font-size: 12px; background-color: var(--danger-color);" onclick="submitSpDecision('reject')">
+              <i class="ri-close-circle-line"></i> Reject Investigation
+            </button>
+            <button type="button" class="btn-primary" style="width: auto; padding: 10px 18px; font-size: 12px; background-color: var(--surface-color); border: 1px solid var(--border-color);" onclick="handleReviewCaseSubmitOnly()">
+              <i class="ri-save-line"></i> Log Notes Only
+            </button>
+          </div>
+        </div>
+
+      </div>
     </div>
   </div>
 

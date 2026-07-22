@@ -481,6 +481,11 @@ async function initDashboard() {
     renderForensicsLab();
   }
 
+  // Superintendent / Admin modules
+  if (activeRole === 'SUPERINTENDENT' || activeRole === 'SUPER_ADMIN') {
+    renderSuperintendentRegistries();
+  }
+
   initRoomView();
   initApexCharts();
   
@@ -3961,40 +3966,359 @@ async function refreshInspectorWorkflowData(caseId) {
   }
 }
 
-function showReviewCaseModal(caseId) {
-  document.getElementById('review-case-id').value = caseId;
+async function showReviewCaseModal(caseId) {
+  let target = (window.CIB_DB.cases || []).find(c => c.id === caseId || c.firId === caseId);
+  if (!target) {
+    try {
+      const token = sessionStorage.getItem('cib_jwt_token');
+      const res = await fetch(`/api/cases/${caseId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (res.ok && data.data) {
+        target = data.data;
+      }
+    } catch (e) {}
+  }
+
+  if (!target) {
+    triggerToast(`Case ${caseId} details could not be loaded from database.`, "danger");
+    return;
+  }
+
+  window.selectedCase = target;
+  document.getElementById('review-case-id').value = target.id;
   document.getElementById('review-notes-input').value = '';
+
+  // 1. Summary Header Card
+  document.getElementById('rv-case-id').textContent = target.id;
+  
+  const priorityColors = { Critical: '#EF4444', High: '#F59E0B', Medium: '#3B82F6', Low: '#10B981' };
+  const pColor = priorityColors[target.priority] || '#3B82F6';
+  document.getElementById('rv-case-priority').innerHTML = `<span class="badge" style="background-color:${pColor}; color:#FFF; font-weight:700; padding:2px 8px;">${target.priority || 'Normal'}</span>`;
+  document.getElementById('rv-case-status').innerHTML = `<span class="badge badge-warning" style="padding:2px 8px;">${target.status || 'Active'}</span>`;
+
+  const officerName = target.assignedOfficer?.user?.name || target.assignedOfficer?.name || target.officerId || 'Unassigned';
+  document.getElementById('rv-case-officer').textContent = officerName;
+
+  // 2. Section 1: FIR & Incident Summary
+  const linkedFir = target.fir || (window.CIB_DB.firs || []).find(f => f.id === target.firId || f.id === target.id);
+  const firDetailsEl = document.getElementById('rv-fir-details');
+  if (linkedFir) {
+    firDetailsEl.innerHTML = `
+      <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 8px; color: #FFF;">
+        <div><strong>FIR ID:</strong> <span style="color:var(--primary-color); font-family:monospace;">${linkedFir.id}</span></div>
+        <div><strong>Title:</strong> ${linkedFir.title || target.title}</div>
+        <div><strong>Category:</strong> ${linkedFir.crimeCategory || target.crimeType || 'General'}</div>
+        <div><strong>Reporter:</strong> ${linkedFir.reporter || 'N/A'}</div>
+        <div><strong>Location:</strong> ${linkedFir.location || target.location || 'N/A'}</div>
+        <div><strong>Registration Date:</strong> ${linkedFir.createdAt ? new Date(linkedFir.createdAt).toLocaleDateString() : 'N/A'}</div>
+      </div>
+      <div style="background-color: var(--card-color); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-color); color: var(--text-secondary); margin-top: 6px;">
+        <strong style="color: #FFF;">FIR Statement:</strong> ${linkedFir.description || 'No detailed statement logged.'}
+      </div>
+    `;
+  } else {
+    firDetailsEl.innerHTML = `<div style="color: var(--text-secondary);">Direct Case Entry — No linked FIR record. Crime Type: ${target.crimeType || 'General'}, Location: ${target.location || 'N/A'}.</div>`;
+  }
+
+  // 3. Section 2: Evidence Vault
+  const evidences = target.evidence || (window.CIB_DB.evidence || []).filter(e => e.caseId === target.id);
+  const evEl = document.getElementById('rv-evidence-container');
+  if (evidences.length === 0) {
+    evEl.innerHTML = '<div style="color: var(--text-secondary); font-size: 12px; padding: 6px 0;">No evidence files uploaded for this case file.</div>';
+  } else {
+    evEl.innerHTML = `
+      <table class="enterprise-table" style="font-size: 11px;">
+        <thead><tr><th>Evidence ID</th><th>Category</th><th>Title / File</th><th>Chain of Custody Status</th><th>Verification</th></tr></thead>
+        <tbody>
+          ${evidences.map(e => `
+            <tr>
+              <td style="font-family: monospace; color: var(--primary-color);">${e.id}</td>
+              <td>${e.category || 'Physical'}</td>
+              <td>${e.title || e.type || 'Evidence File'}</td>
+              <td>${e.chainOfCustodyStatus || 'Secured in Vault'}</td>
+              <td><span class="badge badge-success">${e.verificationStatus || 'Verified'}</span></td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+
+  // 4. Section 3: Forensic Lab Reports
+  const forensics = target.forensics || (window.CIB_DB.forensics || []).filter(f => f.caseId === target.id);
+  const forEl = document.getElementById('rv-forensics-container');
+  if (forensics.length === 0) {
+    forEl.innerHTML = '<div style="color: var(--text-secondary); font-size: 12px; padding: 6px 0;">No forensic lab requests or reports logged.</div>';
+  } else {
+    forEl.innerHTML = `
+      <table class="enterprise-table" style="font-size: 11px;">
+        <thead><tr><th>Report ID</th><th>Biometric / Test</th><th>Specialist</th><th>Status</th><th>Findings Summary</th></tr></thead>
+        <tbody>
+          ${forensics.map(f => `
+            <tr>
+              <td style="font-family: monospace; color: var(--primary-color);">${f.id}</td>
+              <td>${f.type || f.reportTitle || 'Biometric'}</td>
+              <td>${f.analyst || 'Lab Officer'}</td>
+              <td><span class="badge badge-warning">${f.status}</span></td>
+              <td style="max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${f.summary || f.observations || 'Complete'}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+
+  // 5. Section 4: Case Timeline
+  const timeline = target.timeline || [];
+  const timeEl = document.getElementById('rv-timeline-container');
+  if (timeline.length === 0) {
+    timeEl.innerHTML = '<div style="color: var(--text-secondary); font-size: 12px;">No timeline entries recorded.</div>';
+  } else {
+    timeEl.innerHTML = timeline.map(t => `
+      <div style="padding: 8px 10px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <strong style="color: #FFF; font-size: 12px;">${t.step}</strong>
+          <div style="color: var(--text-secondary); font-size: 11px; margin-top: 2px;">${t.details || ''}</div>
+        </div>
+        <span style="font-size: 10px; color: var(--text-secondary); font-family: monospace;">${t.createdAt ? new Date(t.createdAt).toLocaleDateString() : 'Recorded'}</span>
+      </div>
+    `).join('');
+  }
+
+  // 6. Section 5: Witness Statements & Case Notes
+  const notes = target.caseNotes || [];
+  const witnesses = target.witnesses || [];
+  const notesEl = document.getElementById('rv-notes-container');
+  let notesHtml = '';
+
+  if (witnesses.length > 0) {
+    notesHtml += `<div style="font-weight:700; color:#FFF; margin-bottom:6px;">Witness Statements (${witnesses.length}):</div>`;
+    witnesses.forEach(w => {
+      notesHtml += `<div style="background-color:var(--card-color); padding:6px 10px; border-radius:4px; margin-bottom:6px; font-size:11px; border:1px solid var(--border-color);"><strong style="color:var(--primary-color);">${w.name || 'Witness'}:</strong> ${w.statement || w.contact || 'Statement recorded.'}</div>`;
+    });
+  }
+
+  if (notes.length > 0) {
+    notesHtml += `<div style="font-weight:700; color:#FFF; margin-top:8px; margin-bottom:6px;">Investigating Notes (${notes.length}):</div>`;
+    notes.forEach(n => {
+      notesHtml += `<div style="background-color:var(--card-color); padding:6px 10px; border-radius:4px; margin-bottom:6px; font-size:11px; border:1px solid var(--border-color);"><strong style="color:var(--warning-color);">${n.author || 'Officer'}:</strong> ${n.note || n.details}</div>`;
+    });
+  }
+
+  if (!notesHtml) {
+    notesHtml = '<div style="color: var(--text-secondary); font-size: 12px;">No witness statements or officer notes recorded.</div>';
+  }
+
+  notesEl.innerHTML = notesHtml;
+
   showModal('modal-review-case');
 }
 
-async function handleReviewCaseSubmit(event) {
-  event.preventDefault();
+async function submitSpDecision(action) {
   const caseId = document.getElementById('review-case-id').value;
   const notes = document.getElementById('review-notes-input').value;
 
+  if (!notes.trim()) {
+    triggerToast("Please enter review directives/notes before submitting decision.", "warning");
+    return;
+  }
+
   const token = sessionStorage.getItem('cib_jwt_token');
 
+  // Step 1: Log review notes
   try {
-    const response = await fetch('/api/workflow/review-case', {
+    await fetch('/api/workflow/review-case', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify({ caseId, notes })
+      body: JSON.stringify({ caseId, notes: notes.trim() })
     });
-    
-    const result = await response.json();
-    if (response.ok && result.success) {
-      triggerToast("Case review remarks recorded in timeline.", "success");
+  } catch (e) {}
+
+  // Step 2: Perform decision
+  let targetEndpoint = '/api/workflow/sp/approve';
+  let bodyPayload = { caseId };
+  let successMsg = "Case chargesheet approved by Superintendent.";
+
+  if (action === 'request-changes') {
+    targetEndpoint = '/api/workflow/sp/request-changes';
+    bodyPayload = { caseId, instructions: notes.trim() };
+    successMsg = "Change directives sent to investigating officer.";
+  } else if (action === 'reject') {
+    targetEndpoint = '/api/workflow/sp/reject';
+    bodyPayload = { caseId, reason: notes.trim() };
+    successMsg = "Case investigation rejected by Superintendent.";
+  }
+
+  try {
+    const res = await fetch(targetEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(bodyPayload)
+    });
+
+    const data = await res.json();
+    if (res.ok && data.success) {
+      triggerToast(data.message || successMsg, "success");
       hideModal('modal-review-case');
       await refreshInspectorWorkflowData(caseId);
     } else {
-      triggerToast(result.error || "Failed to submit review.", "danger");
+      triggerToast(data.error || "Decision processing failed.", "danger");
     }
   } catch (err) {
     console.error(err);
     triggerToast("Server connection error.", "danger");
+  }
+}
+
+async function handleReviewCaseSubmitOnly() {
+  const caseId = document.getElementById('review-case-id').value;
+  const notes = document.getElementById('review-notes-input').value;
+  if (!notes.trim()) {
+    triggerToast("Please enter review notes to log.", "warning");
+    return;
+  }
+
+  const token = sessionStorage.getItem('cib_jwt_token');
+  try {
+    const res = await fetch('/api/workflow/review-case', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ caseId, notes: notes.trim() })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      triggerToast("Review notes successfully recorded in case timeline.", "success");
+      hideModal('modal-review-case');
+      await refreshInspectorWorkflowData(caseId);
+    } else {
+      triggerToast(data.error || "Failed to log notes.", "danger");
+    }
+  } catch (err) {
+    console.error(err);
+    triggerToast("Server connection error.", "danger");
+  }
+}
+
+function renderSuperintendentRegistries() {
+  const cases = window.CIB_DB.cases || [];
+
+  // 1. Review Cases Table
+  const reviewTbody = document.getElementById('sp-review-cases-tbody');
+  if (reviewTbody) {
+    reviewTbody.innerHTML = '';
+    const activeCases = cases.filter(c => c.status !== 'Closed' && c.status !== 'Solved');
+    if (activeCases.length === 0) {
+      reviewTbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 20px;">No active cases awaiting Superintendent review.</td></tr>';
+    } else {
+      activeCases.forEach(c => {
+        const priorityColors = { Critical: '#EF4444', High: '#F59E0B', Medium: '#3B82F6', Low: '#10B981' };
+        const pColor = priorityColors[c.priority] || '#3B82F6';
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td style="font-family: monospace; font-weight: 700; color: var(--primary-color);">${c.id}</td>
+          <td style="font-weight: 600; color: #FFF;">${c.title}</td>
+          <td>${c.crimeType}</td>
+          <td><span class="badge" style="background-color:${pColor}; color:#FFF; font-size:10px; padding:2px 8px;">${c.priority}</span></td>
+          <td><span class="badge badge-warning" style="font-size:10px; padding:2px 8px;">${c.status}</span></td>
+          <td>
+            <button class="btn-primary" style="width: auto; padding: 6px 12px; font-size: 11px; background-color: var(--warning-color);" onclick="showReviewCaseModal('${c.id}')">
+              <i class="ri-survey-line"></i> Review Files
+            </button>
+          </td>
+        `;
+        reviewTbody.appendChild(row);
+      });
+    }
+  }
+
+  // 2. Chargesheet Hub Table
+  const csTbody = document.getElementById('sp-chargesheet-tbody');
+  if (csTbody) {
+    csTbody.innerHTML = '';
+    const csReady = cases.filter(c => c.status === 'READY_FOR_CHARGESHEET' || c.status === 'Forensic Report Submitted' || c.status === 'UNDER_FORENSIC_REVIEW' || c.status === 'Active');
+    if (csReady.length === 0) {
+      csTbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 20px;">No cases currently awaiting chargesheet sign-off.</td></tr>';
+    } else {
+      csReady.forEach(c => {
+        const officerName = c.assignedOfficer?.user?.name || c.assignedOfficer?.name || c.officerId || 'Investigating Officer';
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td style="font-family: monospace; font-weight: 700; color: var(--primary-color);">${c.id}</td>
+          <td style="font-weight: 600; color: #FFF;">${c.title}</td>
+          <td>${officerName}</td>
+          <td><span class="badge badge-warning" style="font-size:10px; padding:2px 8px;">${c.status}</span></td>
+          <td>
+            <div style="display: flex; gap: 6px;">
+              <button class="btn-primary" style="width: auto; padding: 6px 10px; font-size: 11px; background-color: var(--success-color);" onclick="spApproveCase('${c.id}')">
+                <i class="ri-checkbox-circle-line"></i> Approve & Close
+              </button>
+              <button class="btn-primary" style="width: auto; padding: 6px 10px; font-size: 11px; background-color: var(--warning-color);" onclick="showReviewCaseModal('${c.id}')">
+                <i class="ri-survey-line"></i> Review Files
+              </button>
+            </div>
+          </td>
+        `;
+        csTbody.appendChild(row);
+      });
+    }
+  }
+
+  // 3. Case Closure Archive Table
+  const closeTbody = document.getElementById('sp-close-cases-tbody');
+  if (closeTbody) {
+    closeTbody.innerHTML = '';
+    const closedCases = cases.filter(c => c.status === 'Solved' || c.status === 'Closed' || c.status === 'FORENSIC_APPROVED');
+    if (closedCases.length === 0) {
+      closeTbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-secondary); padding: 20px;">No solved or closed cases archived yet.</td></tr>';
+    } else {
+      closedCases.forEach(c => {
+        const closeDate = c.updatedAt ? new Date(c.updatedAt).toLocaleDateString() : (c.createdAt ? new Date(c.createdAt).toLocaleDateString() : 'Archived');
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td style="font-family: monospace; font-weight: 700; color: var(--primary-color);">${c.id}</td>
+          <td style="font-weight: 600; color: #FFF;">${c.title}</td>
+          <td>${closeDate}</td>
+          <td><span class="badge badge-status-solved" style="font-size:10px; padding:2px 8px;">${c.status}</span></td>
+        `;
+        closeTbody.appendChild(row);
+      });
+    }
+  }
+
+  // 4. Assign Officers Table (Superintendent / SP View)
+  const assignTbody = document.getElementById('sp-assign-officers-tbody');
+  if (assignTbody) {
+    assignTbody.innerHTML = '';
+    if (cases.length === 0) {
+      assignTbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-secondary); padding: 20px;">No active cases registered.</td></tr>';
+    } else {
+      cases.forEach(c => {
+        const officerName = c.assignedOfficer?.user?.name || c.assignedOfficer?.name || c.officerId || 'Unassigned';
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td style="font-family: monospace; font-weight: 700; color: var(--primary-color);">${c.id}</td>
+          <td style="font-weight: 600; color: #FFF;">${c.title}</td>
+          <td>${officerName}</td>
+          <td>
+            <button class="btn-primary" style="width: auto; padding: 6px 12px; font-size: 11px; background-color: var(--primary-color);" onclick="showAssignSiModal('${c.id}')">
+              <i class="ri-user-shared-line"></i> Reassign Sub Inspector
+            </button>
+          </td>
+        `;
+        assignTbody.appendChild(row);
+      });
+    }
   }
 }
 
@@ -4891,7 +5215,10 @@ window.returnForensicReport = returnForensicReport;
 window.forwardCaseToSuperintendent = forwardCaseToSuperintendent;
 window.spApproveCase = spApproveCase;
 window.spRequestChanges = spRequestChanges;
-window.spRejectCase = spRejectCase;
+window.showReviewCaseModal = showReviewCaseModal;
+window.submitSpDecision = submitSpDecision;
+window.handleReviewCaseSubmitOnly = handleReviewCaseSubmitOnly;
+window.renderSuperintendentRegistries = renderSuperintendentRegistries;
 window.exportPDFDocument = exportPDFDocument;
 
 
