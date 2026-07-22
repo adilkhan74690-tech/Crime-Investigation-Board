@@ -177,217 +177,48 @@ router.post('/create-case', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SU
   res.json(formatResponse(newCase, 'Case file created successfully.'));
 }));
 
-// 3. Assign Inspector (Superintendent / SP)
-router.post('/assign-inspector', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SUPERINTENDENT'), asyncHandler(async (req: any, res: any) => {
-  const { caseId, inspectorId } = req.body;
 
-  const updatedCase = await prisma.case.update({
-    where: { id: caseId },
+// 3. Request Forensic Analysis (Sub Inspector)
+
+// 5. Submit Forensic Report Findings (Forensic Specialist)
+router.post('/submit-forensic', authenticateToken, authorizeRoles('SUPER_ADMIN', 'FORENSIC_OFFICER'), asyncHandler(async (req: any, res: any) => {
+  const { caseId, reportTitle, findings, analystName } = req.body;
+  if (!caseId || !findings) throw new ApiError(400, 'Missing caseId or findings content.');
+
+  const report = await prisma.forensicReport.create({
     data: {
-      officerId: inspectorId,
-      assignmentHistory: {
-        create: {
-          officerId: inspectorId,
-          assignedBy: req.user.officerId
-        }
-      }
+      id: `FOR-${Date.now().toString().slice(-6)}`,
+      caseId,
+      type: 'Laboratory Examination',
+      analyst: analystName || req.user.name,
+      reportTitle: reportTitle || 'Forensic Findings Report',
+      status: 'Forensic Report Submitted',
+      summary: findings,
+      observations: 'Forensic examination complete.'
     }
   });
 
-  await logWorkflowAction(req, req.user.officerId, req.user.role, 'Case Assigned', `Case assigned to Inspector ID ${inspectorId}.`, caseId);
-  
-  // Update timeline
-  await prisma.timeline.updateMany({
-    where: { caseId, step: 'Officer Assignment & Briefing' },
-    data: { completed: true, details: `Assigned to Inspector ID: ${inspectorId}` }
-  });
+  await prisma.fir.updateMany({
+    where: { OR: [{ id: caseId }, { case: { id: caseId } }] },
+    data: { status: 'Forensic Report Submitted' }
+  }).catch(console.error);
 
   await prisma.timeline.create({
     data: {
       caseId,
-      step: 'Investigation Underway',
+      step: 'Forensic Report Uploaded',
       completed: true,
-      details: `Inspector assigned by SP. Officer ID: ${inspectorId}`
-    }
-  });
-
-  // Notify assigned inspector via DB & Socket
-  await NotificationService.createNotification(inspectorId, `Case Assigned: You have been assigned to case ${caseId}.`, 'Assignment').catch(console.error);
-  await NotificationService.notifyAll(`Case Assignment: Case ${caseId} assigned to Officer ID ${inspectorId}.`, 'Info').catch(console.error);
-
-  res.json(formatResponse(updatedCase, 'Inspector assigned successfully.'));
-}));
-
-// 4. Request Forensic Analysis (Inspector & Sub Inspector)
-router.post('/request-forensic', authenticateToken, authorizeRoles('SUPER_ADMIN', 'INSPECTOR', 'SUB_INSPECTOR'), asyncHandler(async (req: any, res: any) => {
-  const { caseId } = req.body;
-  const officerId = req.user.officerId;
-
-  console.log('[DEBUG WORKFLOW] Send to Forensics request body received by backend:', req.body);
-  console.log('[DEBUG WORKFLOW] Send to Forensics logged in officerId:', officerId);
-
-  let targetCase = await prisma.case.findUnique({
-    where: { id: caseId }
-  });
-
-  if (!targetCase) {
-    targetCase = await prisma.case.findFirst({
-      where: {
-        OR: [
-          { firId: caseId },
-          { fir: { id: caseId } }
-        ]
-      }
-    });
-  }
-
-  if (!targetCase) {
-    const assignment = await prisma.caseAssignmentHistory.findFirst({
-      where: {
-        officerId: officerId,
-        OR: [
-          { caseId: caseId },
-          { id: caseId },
-          { case: { firId: caseId } }
-        ]
-      },
-      include: { case: true }
-    });
-    if (assignment) {
-      targetCase = assignment.case;
-    }
-  }
-
-  if (!targetCase) {
-    const userAssignments = await prisma.caseAssignmentHistory.findMany({
-      where: { officerId: officerId },
-      include: { case: true }
-    });
-    const matchedAssignment = userAssignments.find(
-      a => a.caseId === caseId || a.case.id === caseId || a.case.firId === caseId
-    );
-    if (matchedAssignment) {
-      targetCase = matchedAssignment.case;
-    } else if (userAssignments.length === 1 && (!caseId || caseId === 'null' || caseId === 'undefined')) {
-      targetCase = userAssignments[0].case;
-    }
-  }
-
-  if (!targetCase) {
-    throw new ApiError(404, 'Assigned case not found.');
-  }
-
-  console.log('[DEBUG WORKFLOW] Send to Forensics resolved Case.id:', targetCase.id);
-
-  const { reportId, type, summary } = req.body;
-
-  const updatedCase = await prisma.case.update({
-    where: { id: targetCase.id },
-    data: { status: 'UNDER_FORENSIC_REVIEW' }
-  });
-
-  // Also update corresponding FIR status for compatibility
-  await prisma.fir.updateMany({
-    where: {
-      OR: [
-        { id: targetCase.id },
-        { case: { id: targetCase.id } }
-      ]
-    },
-    data: { status: 'UNDER_FORENSIC_REVIEW' }
-  }).catch(console.error);
-
-  // Assign Forensic Officer if available in database
-  const forensicUser = await prisma.user.findFirst({
-    where: { role: 'FORENSIC_OFFICER' }
-  });
-
-  const forensicReportId = reportId || `FOR-2026-${Math.floor(100 + Math.random() * 900)}`;
-  const forensicReport = await prisma.forensicReport.create({
-    data: {
-      id: forensicReportId,
-      caseId: targetCase.id,
-      type: type || 'Digital Forensics',
-      analyst: forensicUser ? forensicUser.name : 'Pending Assignment',
-      forensicOfficerId: forensicUser ? forensicUser.id : null,
-      reportTitle: `Forensic Analysis Request - ${type || 'Digital Forensics'}`,
-      summary: summary || 'Forensic laboratory analysis requested by investigating officer.',
-      status: 'Pending Analysis'
-    }
-  }).catch((e: any) => console.log('[DEBUG WORKFLOW] Forensic report note:', e.message));
-
-  // Update Evidence Status & Chain of Custody
-  await prisma.evidence.updateMany({
-    where: { caseId: targetCase.id },
-    data: { 
-      chainOfCustodyStatus: 'Transferred to Digital Forensics Unit for Lab Analysis',
-      verificationStatus: 'Under Forensic Review'
+      details: `Report "${reportTitle || 'Forensic Findings'}" uploaded by ${req.user.name}.`
     }
   }).catch(console.error);
 
-  const caseEvidences = await prisma.evidence.findMany({ where: { caseId: targetCase.id } });
-  for (const ev of caseEvidences) {
-    await prisma.evidenceTransfer.create({
-      data: {
-        evidenceId: ev.id,
-        action: 'Transferred to Digital Forensics Unit for Analysis',
-        handler: `${req.user.name} (${req.user.role})`
-      }
-    }).catch(() => {});
-  }
-
-  // Create Timeline entry
-  await prisma.timeline.create({
-    data: {
-      caseId: targetCase.id,
-      step: 'Sent to Forensics',
-      completed: true,
-      details: `Case transferred to Digital Forensics Unit by ${req.user.name} (${req.user.role}). Request ID: ${forensicReportId}`
-    }
-  }).catch(console.error);
-
-  // Generate Notifications
-  await NotificationService.notifyRole('FORENSIC_OFFICER', `New Forensic Analysis requested for Case ${targetCase.id}: ${summary || type}`, 'Alert').catch(console.error);
-  await NotificationService.notifyRole('INSPECTOR', `Case ${targetCase.id} sent to Digital Forensics Lab by ${req.user.name}.`, 'Info').catch(console.error);
-
-  console.log('[DEBUG WORKFLOW] Forensic report created:', forensicReportId);
-
-  await logWorkflowAction(req, req.user.officerId, req.user.role, 'Sent to Forensics', `Case status updated to UNDER_FORENSIC_REVIEW and forensic report ${forensicReportId} created.`, targetCase.id);
-
-  res.json(formatResponse({ case: updatedCase, forensicReport }, 'Case status updated to UNDER_FORENSIC_REVIEW and Forensic Report created successfully.'));
-}));
-
-// 5. Submit Forensic Findings (Forensic Officer)
-router.post('/submit-forensic', authenticateToken, authorizeRoles('SUPER_ADMIN', 'FORENSIC_OFFICER'), asyncHandler(async (req: any, res: any) => {
-  const { reportId, summary } = req.body;
-
-  const report = await prisma.forensicReport.update({
-    where: { id: reportId },
-    data: {
-      summary,
-      status: 'Pending Approval',
-      approvalDate: 'Awaiting Superintendent Approval'
-    }
-  });
-
-  await logWorkflowAction(req, req.user.officerId, req.user.role, 'Forensic Findings Submitted', `Findings submitted for report ${reportId}.`, report.caseId);
-  
-  await prisma.timeline.create({
-    data: {
-      caseId: report.caseId,
-      step: 'Forensic Findings Ingested',
-      completed: true,
-      details: `Report ID: ${reportId}. Status: Pending SP Review.`
-    }
-  });
-
-  await NotificationService.notifyRole('SUPERINTENDENT', `Forensic Report Submitted: Analysis complete for report ${reportId}.`, 'Alert').catch(console.error);
+  await NotificationService.notifyRole('SUB_INSPECTOR', `Forensic Report uploaded for Case ${caseId} by Specialist ${req.user.name}.`, 'Alert').catch(console.error);
 
   res.json(formatResponse(report, 'Forensic findings submitted for review.'));
 }));
 
-// 6. Complete Investigation (Inspector)
-router.post('/complete-investigation', authenticateToken, authorizeRoles('SUPER_ADMIN', 'INSPECTOR'), asyncHandler(async (req: any, res: any) => {
+// 6. Complete Investigation (Sub Inspector)
+router.post('/complete-investigation', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SUB_INSPECTOR'), asyncHandler(async (req: any, res: any) => {
   const { caseId } = req.body;
   if (!caseId) throw new ApiError(400, 'Missing caseId.');
   
@@ -398,212 +229,143 @@ router.post('/complete-investigation', authenticateToken, authorizeRoles('SUPER_
       caseId,
       step: 'Investigation Logged as Complete',
       completed: true,
-      details: 'Inspector submitted case file to Superintendent for final chargesheet sign-off.'
+      details: 'Sub Inspector submitted case file to Superintendent for final chargesheet sign-off.'
     }
   });
 
   await NotificationService.notifyRole('SUPERINTENDENT', `Case Investigation Complete: Case ${caseId} awaiting SP review.`, 'Alert').catch(console.error);
 
-  res.json(formatResponse({ caseId }, 'Investigation marked as completed and submitted for review.'));
+  res.json(formatResponse({ caseId, status: 'READY_FOR_CHARGESHEET' }, 'Investigation marked as complete and sent to Superintendent.'));
 }));
 
-// Helper to resolve target case safely
-async function resolveCaseSafely(caseId: string) {
-  let targetCase = await prisma.case.findUnique({ where: { id: caseId } });
-  if (!targetCase) {
-    targetCase = await prisma.case.findFirst({
-      where: {
-        OR: [
-          { firId: caseId },
-          { fir: { id: caseId } }
-        ]
-      }
-    });
-  }
-  if (!targetCase) {
-    throw new ApiError(404, `Case record not found for reference: ${caseId}`);
-  }
-  return targetCase;
-}
-
-// 7. Review Case (Superintendent)
+// 7. Review Case (Superintendent / SP)
 router.post('/review-case', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SUPERINTENDENT'), asyncHandler(async (req: any, res: any) => {
   const { caseId, notes } = req.body;
-  if (!caseId || !notes) throw new ApiError(400, 'Missing caseId or notes.');
-  
-  const targetCase = await resolveCaseSafely(caseId);
-
-  await logWorkflowAction(req, req.user.officerId, req.user.role, 'Case Reviewed', `Case reviewed by Superintendent. Notes: ${notes}`, targetCase.id);
+  if (!caseId || !notes) throw new ApiError(400, 'Missing caseId or review notes.');
 
   await prisma.timeline.create({
     data: {
-      caseId: targetCase.id,
-      step: 'Superintendent Review Logged',
+      caseId,
+      step: 'Superintendent Review',
       completed: true,
-      details: `Review Note: "${notes}"`
+      details: `SP ${req.user.name} logged review notes: "${notes}"`
     }
   });
 
-  if (targetCase.officerId) {
-    await prisma.notification.create({
-      data: {
-        userId: targetCase.officerId,
-        message: `Superintendent ${req.user.name} reviewed Case ${targetCase.id}. Remarks: "${notes.slice(0, 50)}..."`,
-        type: 'Info'
-      }
-    }).catch(console.error);
-  }
+  await logWorkflowAction(req, req.user.officerId, req.user.role, 'Case Reviewed', `SP logged review notes for case ${caseId}`, caseId);
+  await NotificationService.notifyRole('SUB_INSPECTOR', `Case ${caseId} reviewed by Superintendent ${req.user.name}.`, 'Info').catch(console.error);
 
-  await NotificationService.notifyAll(`Case Reviewed: Superintendent logged review notes for Case ${targetCase.id}.`, 'Info').catch(console.error);
-
-  res.json(formatResponse({ caseId: targetCase.id }, 'Case review completed and logged.'));
+  res.json(formatResponse({ caseId, notes }, 'Case review notes recorded successfully.'));
 }));
 
-// 8. Approve Chargesheet & Case Status Transition (Superintendent)
-const handleApproveChargesheet = async (req: any, res: any) => {
-  const { caseId, remarks } = req.body;
-  if (!caseId) throw new ApiError(400, 'Missing caseId.');
-
-  const targetCase = await resolveCaseSafely(caseId);
-
-  // Status transitions: FORENSIC_APPROVED -> READY_FOR_CHARGESHEET -> CLOSED
-  let newStatus: any = 'READY_FOR_CHARGESHEET';
-  if (targetCase.status === 'READY_FOR_CHARGESHEET' || targetCase.status === 'Active') {
-    newStatus = 'CLOSED';
-  } else if (targetCase.status === 'UNDER_FORENSIC_REVIEW') {
-    newStatus = 'FORENSIC_APPROVED';
-  } else if (targetCase.status === 'FORENSIC_APPROVED') {
-    newStatus = 'READY_FOR_CHARGESHEET';
-  }
-
-  const updatedCase = await prisma.case.update({
-    where: { id: targetCase.id },
-    data: { status: newStatus as any }
-  });
-
-  // Update linked FIR status
-  await prisma.fir.updateMany({
-    where: { OR: [{ id: targetCase.id }, { case: { id: targetCase.id } }] },
-    data: { status: newStatus }
-  }).catch(console.error);
-
-  await logWorkflowAction(req, req.user.officerId, req.user.role, 'Chargesheet Approved', `Superintendent approved case ${targetCase.id}. New Status: ${newStatus}. Remarks: ${remarks || 'None'}`, targetCase.id);
-  
-  await prisma.timeline.create({
-    data: {
-      caseId: targetCase.id,
-      step: 'Superintendent Approval Granted',
-      completed: true,
-      details: `Chargesheet & Investigation File Approved by Superintendent ${req.user.name}. Status transitioned to ${newStatus}.${remarks ? ' Remarks: ' + remarks : ''}`
-    }
-  });
-
-  if (targetCase.officerId) {
-    await prisma.notification.create({
-      data: {
-        userId: targetCase.officerId,
-        message: `Superintendent ${req.user.name} approved Case ${targetCase.id}. Status: ${newStatus}.`,
-        type: 'Alert'
-      }
-    }).catch(console.error);
-  }
-
-  await NotificationService.notifyRole('INSPECTOR', `Case ${targetCase.id} approved by Superintendent. Status: ${newStatus}.`, 'Info').catch(console.error);
-
-  res.json(formatResponse(updatedCase, `Superintendent approval granted. Case status updated to ${newStatus}.`));
-};
-
+// 8. Chargesheet Approval / Approve / Reject (Superintendent)
 router.post('/approve-chargesheet', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SUPERINTENDENT'), asyncHandler(handleApproveChargesheet));
 router.post('/sp/approve', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SUPERINTENDENT'), asyncHandler(handleApproveChargesheet));
 
-// 8b. Reject Case / Investigation (Superintendent)
+async function handleApproveChargesheet(req: any, res: any) {
+  const { caseId } = req.body;
+  if (!caseId) throw new ApiError(400, 'Missing caseId.');
+
+  const targetCase = await prisma.case.findFirst({
+    where: { OR: [{ id: caseId }, ...(caseId ? [{ firId: caseId }] : [])] }
+  });
+
+  if (!targetCase) throw new ApiError(404, `Case ${caseId} not found.`);
+
+  const newStatus = 'FORENSIC_APPROVED';
+
+  const updatedCase = await prisma.case.update({
+    where: { id: targetCase.id },
+    data: { status: newStatus }
+  });
+
+  await prisma.fir.updateMany({
+    where: { OR: [{ id: targetCase.id }, ...(targetCase.firId ? [{ id: targetCase.firId }] : [])] },
+    data: { status: newStatus }
+  }).catch(console.error);
+
+  await prisma.timeline.create({
+    data: {
+      caseId: targetCase.id,
+      step: 'Chargesheet Approved',
+      completed: true,
+      details: `Chargesheet approved by Superintendent ${req.user.name}. Case marked as ${newStatus}.`
+    }
+  });
+
+  await logWorkflowAction(req, req.user.officerId, req.user.role, 'Chargesheet Approved', `SP approved chargesheet for case ${targetCase.id}`, targetCase.id);
+  await NotificationService.notifyRole('SUB_INSPECTOR', `Case ${targetCase.id} approved by Superintendent. Status: ${newStatus}.`, 'Info').catch(console.error);
+
+  res.json(formatResponse(updatedCase, 'Chargesheet approved and case status updated successfully.'));
+}
+
 router.post('/sp/reject', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SUPERINTENDENT'), asyncHandler(async (req: any, res: any) => {
   const { caseId, reason } = req.body;
   if (!caseId || !reason) throw new ApiError(400, 'Missing caseId or rejection reason.');
 
-  const targetCase = await resolveCaseSafely(caseId);
+  const targetCase = await prisma.case.findFirst({
+    where: { OR: [{ id: caseId }, ...(caseId ? [{ firId: caseId }] : [])] }
+  });
+
+  if (!targetCase) throw new ApiError(404, `Case ${caseId} not found.`);
 
   const updatedCase = await prisma.case.update({
     where: { id: targetCase.id },
-    data: { status: 'REJECTED_BY_SP' }
+    data: { status: 'Active' }
   });
 
   await prisma.fir.updateMany({
-    where: { OR: [{ id: targetCase.id }, { case: { id: targetCase.id } }] },
-    data: { status: 'REJECTED_BY_SP' }
+    where: { OR: [{ id: targetCase.id }, ...(targetCase.firId ? [{ id: targetCase.firId }] : [])] },
+    data: { status: 'Active' }
   }).catch(console.error);
-
-  await logWorkflowAction(req, req.user.officerId, req.user.role, 'Investigation Rejected', `Superintendent rejected Case ${targetCase.id}. Reason: ${reason}`, targetCase.id);
 
   await prisma.timeline.create({
     data: {
       caseId: targetCase.id,
-      step: 'Investigation Rejected by Superintendent',
+      step: 'Investigation Rejected',
       completed: true,
       details: `Superintendent ${req.user.name} rejected case file. Reason: "${reason}"`
     }
   });
 
-  if (targetCase.officerId) {
-    await prisma.notification.create({
-      data: {
-        userId: targetCase.officerId,
-        message: `Superintendent ${req.user.name} rejected Case ${targetCase.id}. Reason: "${reason}"`,
-        type: 'Alert'
-      }
-    }).catch(console.error);
-  }
+  await logWorkflowAction(req, req.user.officerId, req.user.role, 'Case Rejected', `SP rejected case ${targetCase.id}: ${reason}`, targetCase.id);
+  await NotificationService.notifyRole('SUB_INSPECTOR', `Case ${targetCase.id} rejected by Superintendent. Reason: ${reason}`, 'Alert').catch(console.error);
 
-  await NotificationService.notifyRole('INSPECTOR', `Case ${targetCase.id} rejected by Superintendent. Reason: ${reason}`, 'Alert').catch(console.error);
-
-  res.json(formatResponse(updatedCase, 'Investigation rejected by Superintendent and returned to officer.'));
+  res.json(formatResponse(updatedCase, 'Case investigation rejected and returned to active state.'));
 }));
 
-// 8c. Request Changes / Additional Investigation (Superintendent)
 router.post('/sp/request-changes', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SUPERINTENDENT'), asyncHandler(async (req: any, res: any) => {
   const { caseId, instructions } = req.body;
   if (!caseId || !instructions) throw new ApiError(400, 'Missing caseId or change instructions.');
 
-  const targetCase = await resolveCaseSafely(caseId);
+  const targetCase = await prisma.case.findFirst({
+    where: { OR: [{ id: caseId }, ...(caseId ? [{ firId: caseId }] : [])] }
+  });
+
+  if (!targetCase) throw new ApiError(404, `Case ${caseId} not found.`);
 
   const updatedCase = await prisma.case.update({
     where: { id: targetCase.id },
-    data: { status: 'ADDITIONAL_INVESTIGATION_REQUIRED' }
+    data: { status: 'Active' }
   });
-
-  await prisma.fir.updateMany({
-    where: { OR: [{ id: targetCase.id }, { case: { id: targetCase.id } }] },
-    data: { status: 'REVISION_REQUESTED' }
-  }).catch(console.error);
-
-  await logWorkflowAction(req, req.user.officerId, req.user.role, 'Changes Requested', `Superintendent requested changes for Case ${targetCase.id}. Instructions: ${instructions}`, targetCase.id);
 
   await prisma.timeline.create({
     data: {
       caseId: targetCase.id,
-      step: 'Superintendent Requested Changes',
+      step: 'Change Request Issued',
       completed: true,
-      details: `Superintendent ${req.user.name} requested additional investigation: "${instructions}"`
+      details: `Superintendent ${req.user.name} requested changes: "${instructions}"`
     }
   });
 
-  if (targetCase.officerId) {
-    await prisma.notification.create({
-      data: {
-        userId: targetCase.officerId,
-        message: `Superintendent ${req.user.name} requested changes for Case ${targetCase.id}: "${instructions}"`,
-        type: 'Alert'
-      }
-    }).catch(console.error);
-  }
-
-  await NotificationService.notifyRole('INSPECTOR', `Superintendent requested changes for Case ${targetCase.id}: ${instructions}`, 'Alert').catch(console.error);
+  await logWorkflowAction(req, req.user.officerId, req.user.role, 'Changes Requested', `SP requested changes for case ${targetCase.id}: ${instructions}`, targetCase.id);
+  await NotificationService.notifyRole('SUB_INSPECTOR', `Superintendent requested changes for Case ${targetCase.id}: ${instructions}`, 'Alert').catch(console.error);
 
   res.json(formatResponse(updatedCase, 'Change request sent to investigating officer successfully.'));
 }));
 
-// 9. Add Investigation Note (Inspector / Sub Inspector / Super Admin)
-router.post('/notes', authenticateToken, authorizeRoles('SUPER_ADMIN', 'INSPECTOR', 'SUB_INSPECTOR'), asyncHandler(async (req: any, res: any) => {
+// 9. Add Investigation Note (Sub Inspector / Super Admin)
+router.post('/notes', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SUB_INSPECTOR'), asyncHandler(async (req: any, res: any) => {
   const { caseId, note } = req.body;
   if (!caseId || !note) throw new ApiError(400, 'Missing caseId or note content.');
 
@@ -629,53 +391,8 @@ router.post('/notes', authenticateToken, authorizeRoles('SUPER_ADMIN', 'INSPECTO
   res.json(formatResponse(createdNote, 'Investigation note recorded in PostgreSQL successfully.'));
 }));
 
-// 10. Edit Investigation Note
-router.put('/notes/:id', authenticateToken, authorizeRoles('SUPER_ADMIN', 'INSPECTOR', 'SUB_INSPECTOR'), asyncHandler(async (req: any, res: any) => {
-  const noteId = parseInt(req.params.id);
-  const { note } = req.body;
-
-  if (!note) throw new ApiError(400, 'Missing note content.');
-
-  const updatedNote = await prisma.caseNote.update({
-    where: { id: noteId },
-    data: { note }
-  });
-
-  await prisma.timeline.create({
-    data: {
-      caseId: updatedNote.caseId,
-      step: 'Investigation Note Updated',
-      completed: true,
-      details: `Note ID ${noteId} edited by ${req.user.name}.`
-    }
-  }).catch(console.error);
-
-  res.json(formatResponse(updatedNote, 'Investigation note updated successfully.'));
-}));
-
-// 11. Delete Investigation Note
-router.delete('/notes/:id', authenticateToken, authorizeRoles('SUPER_ADMIN', 'INSPECTOR', 'SUB_INSPECTOR'), asyncHandler(async (req: any, res: any) => {
-  const noteId = parseInt(req.params.id);
-
-  const existing = await prisma.caseNote.findUnique({ where: { id: noteId } });
-  if (!existing) throw new ApiError(404, 'Case note not found.');
-
-  await prisma.caseNote.delete({ where: { id: noteId } });
-
-  await prisma.timeline.create({
-    data: {
-      caseId: existing.caseId,
-      step: 'Investigation Note Deleted',
-      completed: true,
-      details: `Note ID ${noteId} deleted by ${req.user.name}.`
-    }
-  }).catch(console.error);
-
-  res.json(formatResponse(null, 'Investigation note deleted successfully.'));
-}));
-
-// 12. Accept Forensic Report (Inspector / Super Admin)
-router.post('/accept-forensic-report', authenticateToken, authorizeRoles('SUPER_ADMIN', 'INSPECTOR'), asyncHandler(async (req: any, res: any) => {
+// 10. Accept Forensic Report (Sub Inspector / Super Admin)
+router.post('/accept-forensic-report', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SUB_INSPECTOR'), asyncHandler(async (req: any, res: any) => {
   const { reportId, caseId } = req.body;
   if (!reportId) throw new ApiError(400, 'Missing reportId.');
 
@@ -683,20 +400,11 @@ router.post('/accept-forensic-report', authenticateToken, authorizeRoles('SUPER_
     where: { id: reportId },
     data: {
       status: 'Approved',
-      approvalDate: `Accepted by Inspector ${req.user.name} on ${new Date().toLocaleDateString()}`
+      approvalDate: `Accepted by Sub Inspector ${req.user.name} on ${new Date().toLocaleDateString()}`
     }
   });
 
   const targetCaseId = caseId || updatedReport.caseId;
-
-  // Update linked evidence
-  await prisma.evidence.updateMany({
-    where: { caseId: targetCaseId },
-    data: {
-      verificationStatus: 'Verified Integrity',
-      chainOfCustodyStatus: 'Forensic Report Approved & Verified'
-    }
-  }).catch(console.error);
 
   // Timeline entry
   await prisma.timeline.create({
@@ -704,17 +412,17 @@ router.post('/accept-forensic-report', authenticateToken, authorizeRoles('SUPER_
       caseId: targetCaseId,
       step: 'Forensic Report Accepted',
       completed: true,
-      details: `Inspector ${req.user.name} accepted forensic report "${updatedReport.reportTitle}".`
+      details: `Sub Inspector ${req.user.name} accepted forensic report "${updatedReport.reportTitle}".`
     }
   }).catch(console.error);
 
-  await NotificationService.notifyRole('FORENSIC_OFFICER', `Forensic Report ${reportId} accepted by Inspector ${req.user.name}.`, 'Info').catch(console.error);
+  await NotificationService.notifyRole('FORENSIC_OFFICER', `Forensic Report ${reportId} accepted by Sub Inspector ${req.user.name}.`, 'Info').catch(console.error);
 
   res.json(formatResponse(updatedReport, 'Forensic report accepted and evidence verified successfully.'));
 }));
 
-// 13. Return Forensic Report for Revision (Inspector / Super Admin)
-router.post('/return-forensic-report', authenticateToken, authorizeRoles('SUPER_ADMIN', 'INSPECTOR'), asyncHandler(async (req: any, res: any) => {
+// 11. Return Forensic Report for Revision (Sub Inspector / Super Admin)
+router.post('/return-forensic-report', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SUB_INSPECTOR'), asyncHandler(async (req: any, res: any) => {
   const { reportId, caseId, remarks } = req.body;
   if (!reportId || !remarks) throw new ApiError(400, 'Missing reportId or revision remarks.');
 
@@ -725,7 +433,7 @@ router.post('/return-forensic-report', authenticateToken, authorizeRoles('SUPER_
     where: { id: reportId },
     data: {
       status: 'Returned for Revision',
-      observations: `${existing.observations || ''}\n[Inspector Revision Note]: ${remarks}`,
+      observations: `${existing.observations || ''}\n[Sub Inspector Revision Note]: ${remarks}`,
       approvalDate: 'Returned for Revision'
     }
   });
@@ -736,15 +444,15 @@ router.post('/return-forensic-report', authenticateToken, authorizeRoles('SUPER_
   await prisma.timeline.create({
     data: {
       caseId: targetCaseId,
-      step: 'Forensic Report Returned',
+      step: 'Forensic Report Returned for Revision',
       completed: true,
-      details: `Inspector ${req.user.name} returned report "${existing.reportTitle}" for revision. Remarks: "${remarks}"`
+      details: `Sub Inspector ${req.user.name} returned report "${existing.reportTitle}" for revision. Remarks: "${remarks}"`
     }
   }).catch(console.error);
 
-  await NotificationService.notifyRole('FORENSIC_OFFICER', `Forensic Report ${reportId} returned for revision by Inspector ${req.user.name}. Remarks: ${remarks}`, 'Alert').catch(console.error);
+  await NotificationService.notifyRole('FORENSIC_OFFICER', `Forensic Report ${reportId} returned for revision by Sub Inspector ${req.user.name}. Remarks: ${remarks}`, 'Alert').catch(console.error);
 
-  res.json(formatResponse(updatedReport, 'Forensic report returned for revision.'));
+  res.json(formatResponse(updatedReport, 'Forensic report returned for revision successfully.'));
 }));
 
 export default router;

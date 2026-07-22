@@ -52,7 +52,7 @@ export class NotificationService {
   }
 
   public static async notifyRole(
-    role: 'SUPER_ADMIN' | 'INSPECTOR' | 'SUB_INSPECTOR' | 'FORENSIC_OFFICER' | 'SUPERINTENDENT',
+    role: 'SUPER_ADMIN' | 'SUB_INSPECTOR' | 'FORENSIC_OFFICER' | 'SUPERINTENDENT',
     message: string,
     type: 'Info' | 'Alert' | 'Assignment' | 'System' = 'Info'
   ) {

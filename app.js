@@ -34,8 +34,7 @@ let totalAuditLogs = 0;
 const ROLE_PERMISSIONS = {
   SUPER_ADMIN: ['sa-dashboard', 'sa-officers', 'sa-departments', 'sa-cases', 'io-evidence', 'io-forensics', 'sa-audit-logs', 'sa-analytics', 'sa-settings'],
   SUPERINTENDENT: ['sp-dashboard', 'sp-review-cases', 'sp-approvals', 'io-evidence', 'sa-analytics'],
-  INSPECTOR: ['io-dashboard', 'io-cases', 'io-evidence', 'io-timeline', 'io-notes', 'io-forensics'],
-  SUB_INSPECTOR: ['si-dashboard', 'si-register-fir', 'si-create-case', 'io-cases'],
+  SUB_INSPECTOR: ['si-dashboard', 'si-register-fir', 'si-create-case', 'io-cases', 'io-evidence', 'io-timeline', 'io-notes', 'io-forensics'],
   FORENSIC_OFFICER: ['fo-dashboard', 'fo-pending', 'fo-reports', 'fo-upload', 'fo-fingerprint', 'fo-dna']
 };
 
@@ -49,21 +48,15 @@ const VIEW_METADATA = {
   'sa-analytics': { label: 'Analytics', icon: 'ri-bar-chart-grouped-line' },
   'sa-settings': { label: 'Settings', icon: 'ri-settings-4-line' },
 
-  // Sub Inspector Views
+  // Sub Inspector Views (Investigation Command)
   'si-dashboard': { label: 'Dashboard', icon: 'ri-dashboard-line' },
   'si-register-fir': { label: 'Register FIR', icon: 'ri-file-add-line' },
   'si-create-case': { label: 'Create Case', icon: 'ri-folder-add-line' },
-  'si-victims': { label: 'Victims', icon: 'ri-heart-line' },
-  'si-witnesses': { label: 'Witness Statements', icon: 'ri-user-voice-line' },
-  'si-suspects': { label: 'Suspects Ledger', icon: 'ri-focus-3-line' },
-
-  // Investigation Officer (Inspector) Views
-  'io-dashboard': { label: 'Dashboard', icon: 'ri-dashboard-line' },
-  'io-cases': { label: 'Assigned Cases', icon: 'ri-folder-shield-2-line' },
-  'io-timeline': { label: 'Timeline', icon: 'ri-git-commit-line' },
-  'io-evidence': { label: 'Evidence', icon: 'ri-bubble-chart-line' },
+  'io-cases': { label: 'Investigation Cases', icon: 'ri-folder-shield-2-line' },
+  'io-evidence': { label: 'Evidence Vault', icon: 'ri-bubble-chart-line' },
+  'io-timeline': { label: 'Case Timeline', icon: 'ri-git-commit-line' },
   'io-notes': { label: 'Investigation Notes', icon: 'ri-chat-note-line' },
-  'io-forensics': { label: 'Forensics', icon: 'ri-microscope-line' },
+  'io-forensics': { label: 'Forensics Requests', icon: 'ri-microscope-line' },
 
   // Forensic Officer Views
   'fo-dashboard': { label: 'Dashboard', icon: 'ri-dashboard-line' },
@@ -477,8 +470,8 @@ async function initDashboard() {
     renderSubInspectorRegistries();
   }
 
-  // Forensic / Inspector / Admin modules
-  if (activeRole === 'FORENSIC_OFFICER' || activeRole === 'INSPECTOR' || activeRole === 'SUPER_ADMIN') {
+  // Forensic / Sub Inspector / Admin modules
+  if (activeRole === 'FORENSIC_OFFICER' || activeRole === 'SUB_INSPECTOR' || activeRole === 'SUPER_ADMIN') {
     renderForensicsLab();
   }
 
@@ -928,8 +921,8 @@ function renderCounts() {
   const currentOfficerId = sessionStorage.getItem('cib_officer_id');
   const activeRole = sessionStorage.getItem('cib_officer_role');
 
-  if (activeRole === 'INSPECTOR') {
-    const ioAssigned = window.CIB_DB.cases.filter(c => c.officerId === currentOfficerId).length;
+  if (activeRole === 'SUB_INSPECTOR') {
+    const ioAssigned = window.CIB_DB.cases.filter(c => c.officerId === currentOfficerId || c.createdBy === currentOfficerId).length;
     const ioEvidence = window.CIB_DB.evidence.length;
     animateCounter('io-assigned-count', ioAssigned);
     animateCounter('io-evidence-count', ioEvidence);
@@ -1216,12 +1209,11 @@ function openCaseDetail(caseId) {
         <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--success-color);" onclick="spApproveCase('${target.id}')"><i class="ri-checkbox-circle-line"></i> Approve Case / Chargesheet</button>
         <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--warning-color);" onclick="spRequestChanges('${target.id}')"><i class="ri-edit-line"></i> Request Changes</button>
         <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--danger-color);" onclick="spRejectCase('${target.id}')"><i class="ri-close-circle-line"></i> Reject Investigation</button>
-        <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--border-light);" onclick="showAssignInspectorModal('${target.id}')"><i class="ri-user-shared-line"></i> Assign Inspector</button>
         <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--surface-color); border: 1px solid var(--border-color);" onclick="showReviewCaseModal('${target.id}')"><i class="ri-survey-line"></i> Log Review Notes</button>
       `;
     }
     
-    if ((activeRole === 'INSPECTOR' || activeRole === 'SUB_INSPECTOR') && isAssigned) {
+    if ((activeRole === 'SUB_INSPECTOR' || activeRole === 'SUPER_ADMIN') && isAssigned) {
       actionsContainer.innerHTML += `
         <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px;" onclick="showEvidenceUploadModal('${target.id}')"><i class="ri-upload-cloud-line"></i> Upload Evidence</button>
         <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--border-light);" onclick="showRequestForensicModal('${target.id}')"><i class="ri-microscope-line"></i> Send To Forensics</button>
@@ -1362,7 +1354,7 @@ function openCaseDetail(caseId) {
         const docLink = f.reportFileUrl ? `<a href="${f.reportFileUrl}" target="_blank" class="btn-primary" style="padding: 6px 12px; font-size: 11px; width: auto; background-color: var(--primary-color); display: inline-flex; align-items: center; gap: 4px;"><i class="ri-file-pdf-line"></i> Download Report PDF</a>` : '';
 
         let actionsHTML = '';
-        if (activeRole === 'INSPECTOR' || activeRole === 'SUPER_ADMIN') {
+        if (activeRole === 'SUB_INSPECTOR' || activeRole === 'SUPER_ADMIN') {
           if (!isApproved) {
             actionsHTML = `
               <div style="display:flex; gap:8px;">
@@ -1485,8 +1477,8 @@ function renderEvidenceGrid() {
   if (!container) return;
   container.innerHTML = '';
 
-  // Inspector investigation workflow: Require selectedCase
-  if (activeRole === 'INSPECTOR' && !window.selectedCase) {
+  // Sub Inspector investigation workflow: Require selectedCase
+  if (activeRole === 'SUB_INSPECTOR' && !window.selectedCase) {
     container.innerHTML = `
       <div style="grid-column: 1/-1; padding: 48px 24px; text-align: center; color: var(--text-secondary); background: var(--surface-color); border-radius: var(--radius-lg); border: 1px solid var(--border-color);">
         <i class="ri-folder-shield-2-line" style="font-size: 44px; color: var(--text-secondary); margin-bottom: 12px; display: inline-block;"></i>
@@ -1784,10 +1776,10 @@ function buildDynamicTimeline(target) {
       date: (target.forensics && target.forensics.length > 0) ? target.forensics[0].createdAt : null
     },
     {
-      step: 'Inspector Review',
+      step: 'Sub Inspector Review',
       key: 'inspector_review',
       defaultCompleted: !!(target.forensics && target.forensics.some(f => f.status === 'Approved')),
-      defaultDetails: 'Forensic findings and evidence integrity reviewed & accepted by Inspector.',
+      defaultDetails: 'Forensic findings and evidence integrity reviewed & accepted by Sub Inspector.',
       date: null
     },
     {
@@ -3591,60 +3583,7 @@ async function handleFirSubmit(event) {
   }
 }
 
-async function showAssignInspectorModal(caseId) {
-  document.getElementById('assign-case-id').value = caseId;
-  const select = document.getElementById('assign-inspector-select');
-  if (!select) return;
-  select.innerHTML = '';
 
-  // Get all officers from the DB/cache
-  await fetchOfficers();
-  
-  // Filter for INSPECTOR role
-  const inspectors = window.CIB_DB.officers.filter(o => o.role === 'INSPECTOR');
-  if (inspectors.length === 0) {
-    select.innerHTML = '<option value="">No Inspectors available in division</option>';
-  } else {
-    inspectors.forEach(ins => {
-      select.innerHTML += `<option value="${ins.id}">${ins.name} (${ins.rank || 'Inspector'})</option>`;
-    });
-  }
-
-  showModal('modal-assign-inspector');
-}
-
-async function handleAssignInspectorSubmit(event) {
-  event.preventDefault();
-  const caseId = document.getElementById('assign-case-id').value;
-  const inspectorId = document.getElementById('assign-inspector-select').value;
-  if (!inspectorId) return;
-
-  const token = sessionStorage.getItem('cib_jwt_token');
-
-  try {
-    const response = await fetch('/api/workflow/assign-inspector', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ caseId, inspectorId })
-    });
-    
-    const result = await response.json();
-    if (response.ok && result.success) {
-      triggerToast("Case assigned to officer successfully.", "success");
-      hideModal('modal-assign-inspector');
-      await initDashboard();
-      openCaseDetail(caseId);
-    } else {
-      triggerToast(result.error || "Failed to assign officer.", "danger");
-    }
-  } catch (err) {
-    console.error(err);
-    triggerToast("Server connection error.", "danger");
-  }
-}
 
 function showEvidenceUploadModal(caseId) {
   const selectedCase = (window.CIB_DB.cases || []).find(c => c.id === caseId || c.firId === caseId)
@@ -3952,7 +3891,7 @@ function handleSubmitForensicSubmit(event) {
     try {
       const result = JSON.parse(xhr.responseText);
       if (xhr.status >= 200 && xhr.status < 300 && result.success) {
-        triggerToast("Forensic report PDF and findings uploaded & Inspector notified.", "success");
+        triggerToast("Forensic report PDF and findings uploaded & Sub Inspector notified.", "success");
         hideModal('modal-submit-forensic');
         await initDashboard();
         if (typeof renderForensicsLab === 'function') renderForensicsLab();

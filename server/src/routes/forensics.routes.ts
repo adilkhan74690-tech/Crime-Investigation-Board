@@ -134,13 +134,13 @@ const handleForensicReportUpload = async (req: any, res: any) => {
 
   // Audit Log & Role Notification
   await logAudit(req, req.user.officerId, req.user.role, 'Forensic Report Uploaded', `Uploaded forensic report ${resolvedReportId} for case ${resolvedCaseId}`, resolvedCaseId).catch(console.error);
-  await NotificationService.notifyRole('INSPECTOR', `Forensic report submitted for Case ${resolvedCaseId} by Forensic Specialist ${req.user.name}.`, 'Alert').catch(console.error);
+  await NotificationService.notifyRole('SUB_INSPECTOR', `Forensic report submitted for Case ${resolvedCaseId} by Forensic Specialist ${req.user.name}.`, 'Alert').catch(console.error);
 
-  res.json(formatResponse(forensicRecord, 'Forensic report submitted, saved in PostgreSQL, and Inspector notified successfully.'));
+  res.json(formatResponse(forensicRecord, 'Forensic report submitted, saved in PostgreSQL, and Sub Inspector notified successfully.'));
 };
 
 // 1. List Forensic Reports
-router.get('/', authenticateToken, authorizeRoles('SUPER_ADMIN', 'FORENSIC_OFFICER', 'INSPECTOR', 'SUB_INSPECTOR', 'SUPERINTENDENT'), asyncHandler(async (_req: any, res: any) => {
+router.get('/', authenticateToken, authorizeRoles('SUPER_ADMIN', 'FORENSIC_OFFICER', 'SUB_INSPECTOR', 'SUPERINTENDENT'), asyncHandler(async (_req: any, res: any) => {
   const list = await prisma.forensicReport.findMany({
     orderBy: { createdAt: 'desc' },
     include: { case: true }

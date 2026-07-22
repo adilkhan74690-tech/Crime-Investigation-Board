@@ -250,9 +250,9 @@ const handleEvidenceUpload = async (req: any, res: any, next: any) => {
   }
 };
 
-// 1. Evidence File Upload Routes (Only SUB_INSPECTOR and assigned INSPECTOR allowed)
-router.post('/upload', authenticateToken, authorizeRoles('SUB_INSPECTOR', 'INSPECTOR'), upload.single('file'), handleEvidenceUpload);
-router.post('/', authenticateToken, authorizeRoles('SUB_INSPECTOR', 'INSPECTOR'), upload.single('file'), handleEvidenceUpload);
+// 1. Evidence File Upload Routes (Only SUB_INSPECTOR allowed)
+router.post('/upload', authenticateToken, authorizeRoles('SUB_INSPECTOR'), upload.single('file'), handleEvidenceUpload);
+router.post('/', authenticateToken, authorizeRoles('SUB_INSPECTOR'), upload.single('file'), handleEvidenceUpload);
 
 // 2. Delete Evidence File (Uploader or Super Admin)
 router.delete('/:id', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SUB_INSPECTOR'), asyncHandler(async (req: any, res: any) => {

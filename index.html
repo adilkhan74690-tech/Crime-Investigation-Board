@@ -701,7 +701,6 @@
             <option value="">All Roles</option>
             <option value="SUPER_ADMIN">Super Admin</option>
             <option value="SUB_INSPECTOR">Sub Inspector (SI)</option>
-            <option value="INSPECTOR">Investigation Officer (Inspector)</option>
             <option value="FORENSIC_OFFICER">Forensic Officer</option>
             <option value="SUPERINTENDENT">Superintendent of Police (SP)</option>
           </select>
@@ -956,7 +955,6 @@ Select a target investigation case and click a report type above to generate rea
             <option value="">All Roles</option>
             <option value="SUPER_ADMIN">Super Admin</option>
             <option value="SUB_INSPECTOR">Sub Inspector</option>
-            <option value="INSPECTOR">Inspector</option>
             <option value="FORENSIC_OFFICER">Forensic Officer</option>
             <option value="SUPERINTENDENT">Superintendent</option>
           </select>
@@ -1445,7 +1443,6 @@ Select a target investigation case and click a report type above to generate rea
               <select id="officer-form-role" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
                 <option value="SUPER_ADMIN">Super Admin</option>
                 <option value="SUB_INSPECTOR">Sub Inspector (SI)</option>
-                <option value="INSPECTOR">Investigation Officer (Inspector)</option>
                 <option value="FORENSIC_OFFICER">Forensic Officer</option>
                 <option value="SUPERINTENDENT">Superintendent of Police (SP)</option>
               </select>
@@ -1842,30 +1839,7 @@ Select a target investigation case and click a report type above to generate rea
     </div>
   </div>
 
-  <!-- Assign Officer Modal -->
-  <div id="modal-assign-inspector" class="modal-overlay">
-    <div class="modal-container">
-      <div class="modal-header">
-        <h3 class="modal-title"><i class="ri-user-shared-line"></i> Assign Investigation Officer</h3>
-        <button class="modal-close-btn" onclick="hideModal('modal-assign-inspector')"><i class="ri-close-line"></i></button>
-      </div>
-      <form id="assign-inspector-form" onsubmit="handleAssignInspectorSubmit(event)">
-        <input type="hidden" id="assign-case-id">
-        <div class="modal-body" style="display: flex; flex-direction: column; gap: 16px;">
-          <div class="form-group">
-            <label class="form-label" for="assign-inspector-select">Select Officer / Inspector</label>
-            <select id="assign-inspector-select" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" required>
-              <!-- Filled dynamically with Inspectors -->
-            </select>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn-primary" style="background-color: transparent; border: 1px solid var(--border-light); color: var(--text-primary); width: auto;" onclick="hideModal('modal-assign-inspector')">Cancel</button>
-          <button type="submit" class="btn-primary" style="width: auto;">Assign Officer</button>
-        </div>
-      </form>
-    </div>
-  </div>
+
 
   <!-- Upload Evidence Modal -->
   <div id="modal-evidence-upload" class="modal-overlay">

@@ -13,7 +13,7 @@ router.get('/dashboard-payload', authenticateToken, asyncHandler(async (req: any
 
   // Filter cases by role
   let caseWhereClause: any = {};
-  if (role === 'INSPECTOR' || role === 'SUB_INSPECTOR') {
+  if (role === 'SUB_INSPECTOR') {
     caseWhereClause.OR = [
       { officerId: officerId },
       { createdBy: officerId },
@@ -47,7 +47,7 @@ router.get('/dashboard-payload', authenticateToken, asyncHandler(async (req: any
 
   // Filter evidence by role
   let evidenceWhereClause: any = {};
-  if (role === 'INSPECTOR' || role === 'SUB_INSPECTOR') {
+  if (role === 'SUB_INSPECTOR') {
     evidenceWhereClause = {
       OR: [
         { case: { officerId: officerId } },
@@ -73,7 +73,7 @@ router.get('/dashboard-payload', authenticateToken, asyncHandler(async (req: any
 
   // Filter forensics by role
   let forensicWhereClause: any = {};
-  if (role === 'INSPECTOR') {
+  if (role === 'SUB_INSPECTOR') {
     forensicWhereClause.case = { officerId };
   } else if (role === 'FORENSIC_OFFICER') {
     forensicWhereClause.analyst = req.user.name;

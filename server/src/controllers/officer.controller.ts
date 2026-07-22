@@ -126,7 +126,6 @@ export class OfficerController {
     const rolePrefixes: Record<string, string> = {
       SUPER_ADMIN: 'SA',
       SUB_INSPECTOR: 'SI',
-      INSPECTOR: 'DET',
       FORENSIC_OFFICER: 'FOR',
       SUPERINTENDENT: 'SP'
     };
