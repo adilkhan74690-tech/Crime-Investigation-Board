@@ -2090,6 +2090,9 @@ Select a target investigation case and click a report type above to generate rea
       <!-- Modal Body (Scrollable Workspace) -->
       <div class="modal-body" style="flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 20px;">
         
+        <!-- Completion Banner Container (Dynamically Populated for Closed Cases) -->
+        <div id="rv-completion-banner-container"></div>
+
         <!-- Case Summary Header Card -->
         <div id="review-case-summary-card" style="background-color: var(--surface-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; font-size: 12px;">
           <div><strong style="color:var(--text-secondary);">Case ID:</strong> <div id="rv-case-id" style="font-size: 14px; font-weight: 700; color: var(--primary-color); font-family: monospace;">Loading...</div></div>
@@ -2149,7 +2152,7 @@ Select a target investigation case and click a report type above to generate rea
         </div>
 
         <!-- Section 6: Official Review Notes & Action Decision -->
-        <div style="background-color: rgba(37, 99, 235, 0.05); border: 1px solid rgba(37, 99, 235, 0.2); border-radius: 8px; padding: 16px;">
+        <div id="rv-section-actions" style="background-color: rgba(37, 99, 235, 0.05); border: 1px solid rgba(37, 99, 235, 0.2); border-radius: 8px; padding: 16px;">
           <h4 style="font-size: 13px; font-weight: 700; color: #FFF; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
             <i class="ri-quill-pen-line"></i> 6. Official Review Notes & Superintendent Directives
           </h4>

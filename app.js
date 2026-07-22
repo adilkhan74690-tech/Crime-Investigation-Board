@@ -4010,16 +4010,92 @@ async function showReviewCaseModal(caseId) {
   document.getElementById('review-case-id').value = target.id;
   document.getElementById('review-notes-input').value = '';
 
+  const isClosed = target.status === 'CLOSED' || target.status === 'Closed' || target.status === 'Solved';
+
   // 1. Summary Header Card
   document.getElementById('rv-case-id').textContent = target.id;
   
   const priorityColors = { Critical: '#EF4444', High: '#F59E0B', Medium: '#3B82F6', Low: '#10B981' };
   const pColor = priorityColors[target.priority] || '#3B82F6';
   document.getElementById('rv-case-priority').innerHTML = `<span class="badge" style="background-color:${pColor}; color:#FFF; font-weight:700; padding:2px 8px;">${target.priority || 'Normal'}</span>`;
-  document.getElementById('rv-case-status').innerHTML = `<span class="badge badge-warning" style="padding:2px 8px;">${target.status || 'Active'}</span>`;
+  
+  if (isClosed) {
+    document.getElementById('rv-case-status').innerHTML = `<span class="badge" style="background-color: rgba(16, 185, 129, 0.2); color: #10B981; border: 1px solid #10B981; font-weight: 800; padding: 4px 12px; border-radius: 6px; font-size: 12px; letter-spacing: 0.5px;"><i class="ri-checkbox-circle-line"></i> CASE CLOSED</span>`;
+  } else {
+    document.getElementById('rv-case-status').innerHTML = `<span class="badge badge-warning" style="padding:2px 8px;">${target.status || 'Active'}</span>`;
+  }
 
   const officerName = target.assignedOfficer?.user?.name || target.assignedOfficer?.name || target.officerId || 'Unassigned';
   document.getElementById('rv-case-officer').textContent = officerName;
+
+  // Completion Banner
+  const bannerContainer = document.getElementById('rv-completion-banner-container');
+  if (bannerContainer) {
+    if (isClosed) {
+      bannerContainer.innerHTML = `
+        <div style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.05)); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="width: 44px; height: 44px; border-radius: 50%; background-color: rgba(16, 185, 129, 0.2); color: #10B981; display: flex; align-items: center; justify-content: center; font-size: 24px;">
+              <i class="ri-checkbox-circle-line"></i>
+            </div>
+            <div>
+              <h4 style="color: #10B981; font-size: 14px; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 8px;">
+                ✓ Chargesheet Approved • ✓ Investigation Closed
+              </h4>
+              <div style="color: var(--text-secondary); font-size: 12px; margin-top: 4px;">
+                Approved By: <strong style="color: #FFF;">Superintendent</strong> • Approval Date & Time: <span style="color: #FFF; font-family: monospace;">${target.updatedAt ? new Date(target.updatedAt).toLocaleString() : new Date().toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+          <span class="badge" style="background-color: rgba(16, 185, 129, 0.2); color: #10B981; border: 1px solid #10B981; font-weight: 800; font-size: 12px; padding: 6px 14px; letter-spacing: 0.5px;">READ ONLY ARCHIVE</span>
+        </div>
+      `;
+    } else {
+      bannerContainer.innerHTML = '';
+    }
+  }
+
+  // Section 6 Actions
+  const actionsSec = document.getElementById('rv-section-actions');
+  if (actionsSec) {
+    if (isClosed) {
+      actionsSec.innerHTML = `
+        <div style="background-color: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 8px; padding: 20px; text-align: center;">
+          <div style="width: 48px; height: 48px; border-radius: 50%; background-color: rgba(16, 185, 129, 0.15); color: #10B981; display: flex; align-items: center; justify-content: center; font-size: 24px; margin: 0 auto 12px auto;">
+            <i class="ri-shield-check-line"></i>
+          </div>
+          <h4 style="font-size: 16px; font-weight: 700; color: #10B981; margin-bottom: 4px;">Investigation Completed</h4>
+          <p style="font-size: 13px; color: var(--text-secondary); margin: 0;">This case has been officially closed and archived by the Superintendent. All investigation files, evidence hashes, and timeline journals are locked in read-only mode.</p>
+        </div>
+      `;
+    } else {
+      actionsSec.innerHTML = `
+        <h4 style="font-size: 13px; font-weight: 700; color: #FFF; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+          <i class="ri-quill-pen-line"></i> 6. Official Review Notes & Superintendent Directives
+        </h4>
+        <input type="hidden" id="review-case-id" value="${target.id}">
+        <div class="form-group" style="margin-bottom: 16px;">
+          <label class="form-label" for="review-notes-input" style="font-size: 12px; color: var(--text-secondary);">Logged Directives & Review Remarks</label>
+          <textarea id="review-notes-input" class="form-input" style="width: 100%; padding: 12px; height: 90px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px; resize: vertical; font-size: 13px;" placeholder="Type official review directives, legal observations, or instructions..." required></textarea>
+        </div>
+
+        <div style="display: flex; gap: 12px; justify-content: flex-end; flex-wrap: wrap;">
+          <button type="button" class="btn-primary" style="width: auto; padding: 10px 18px; font-size: 12px; background-color: var(--success-color);" onclick="submitSpDecision('approve')">
+            <i class="ri-checkbox-circle-line"></i> Approve Case / Chargesheet
+          </button>
+          <button type="button" class="btn-primary" style="width: auto; padding: 10px 18px; font-size: 12px; background-color: var(--warning-color);" onclick="submitSpDecision('request-changes')">
+            <i class="ri-edit-line"></i> Request Changes
+          </button>
+          <button type="button" class="btn-primary" style="width: auto; padding: 10px 18px; font-size: 12px; background-color: var(--danger-color);" onclick="submitSpDecision('reject')">
+            <i class="ri-close-circle-line"></i> Reject Investigation
+          </button>
+          <button type="button" class="btn-primary" style="width: auto; padding: 10px 18px; font-size: 12px; background-color: var(--surface-color); border: 1px solid var(--border-color);" onclick="handleReviewCaseSubmitOnly()">
+            <i class="ri-save-line"></i> Log Notes Only
+          </button>
+        </div>
+      `;
+    }
+  }
 
   // 2. Section 1: FIR & Incident Summary
   const linkedFir = target.fir || (window.CIB_DB.firs || []).find(f => f.id === target.firId || f.id === target.id);
@@ -4091,7 +4167,15 @@ async function showReviewCaseModal(caseId) {
   }
 
   // 5. Section 4: Case Timeline
-  const timeline = target.timeline || [];
+  const timeline = [...(target.timeline || [])];
+  if (isClosed && !timeline.some(t => t.step && t.step.includes('Closed'))) {
+    timeline.push({
+      step: 'Chargesheet Approved & Case Officially Closed',
+      details: 'Investigation officially concluded and approved by Superintendent.',
+      createdAt: target.updatedAt || new Date()
+    });
+  }
+
   const timeEl = document.getElementById('rv-timeline-container');
   if (timeline.length === 0) {
     timeEl.innerHTML = '<div style="color: var(--text-secondary); font-size: 12px;">No timeline entries recorded.</div>';
