@@ -24,9 +24,14 @@ enum Department {
 }
 
 enum CaseStatus {
-  Active @map("Active")
-  Solved @map("Solved")
-  UNDER_FORENSIC_REVIEW @map("UNDER_FORENSIC_REVIEW")
+  Active                            @map("Active")
+  Solved                            @map("Solved")
+  UNDER_FORENSIC_REVIEW            @map("UNDER_FORENSIC_REVIEW")
+  FORENSIC_APPROVED                 @map("FORENSIC_APPROVED")
+  READY_FOR_CHARGESHEET             @map("READY_FOR_CHARGESHEET")
+  CLOSED                            @map("CLOSED")
+  REJECTED_BY_SP                    @map("REJECTED_BY_SP")
+  ADDITIONAL_INVESTIGATION_REQUIRED @map("ADDITIONAL_INVESTIGATION_REQUIRED")
 }
 
 enum Priority {

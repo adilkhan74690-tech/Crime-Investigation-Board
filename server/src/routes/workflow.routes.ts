@@ -408,52 +408,199 @@ router.post('/complete-investigation', authenticateToken, authorizeRoles('SUPER_
   res.json(formatResponse({ caseId }, 'Investigation marked as completed and submitted for review.'));
 }));
 
+// Helper to resolve target case safely
+async function resolveCaseSafely(caseId: string) {
+  let targetCase = await prisma.case.findUnique({ where: { id: caseId } });
+  if (!targetCase) {
+    targetCase = await prisma.case.findFirst({
+      where: {
+        OR: [
+          { firId: caseId },
+          { fir: { id: caseId } }
+        ]
+      }
+    });
+  }
+  if (!targetCase) {
+    throw new ApiError(404, `Case record not found for reference: ${caseId}`);
+  }
+  return targetCase;
+}
+
 // 7. Review Case (Superintendent)
 router.post('/review-case', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SUPERINTENDENT'), asyncHandler(async (req: any, res: any) => {
   const { caseId, notes } = req.body;
   if (!caseId || !notes) throw new ApiError(400, 'Missing caseId or notes.');
   
-  await logWorkflowAction(req, req.user.officerId, req.user.role, 'Case Reviewed', `Case reviewed by Superintendent. Notes: ${notes}`, caseId);
+  const targetCase = await resolveCaseSafely(caseId);
+
+  await logWorkflowAction(req, req.user.officerId, req.user.role, 'Case Reviewed', `Case reviewed by Superintendent. Notes: ${notes}`, targetCase.id);
 
   await prisma.timeline.create({
     data: {
-      caseId,
+      caseId: targetCase.id,
       step: 'Superintendent Review Logged',
       completed: true,
-      details: `Review Note Excerpt: "${notes.slice(0, 50)}..."`
+      details: `Review Note: "${notes}"`
     }
   });
 
-  await NotificationService.notifyAll(`Case Reviewed: Superintendent logged review notes for Case ${caseId}.`, 'Info').catch(console.error);
+  if (targetCase.officerId) {
+    await prisma.notification.create({
+      data: {
+        userId: targetCase.officerId,
+        message: `Superintendent ${req.user.name} reviewed Case ${targetCase.id}. Remarks: "${notes.slice(0, 50)}..."`,
+        type: 'Info'
+      }
+    }).catch(console.error);
+  }
 
-  res.json(formatResponse({ caseId }, 'Case review completed and logged.'));
+  await NotificationService.notifyAll(`Case Reviewed: Superintendent logged review notes for Case ${targetCase.id}.`, 'Info').catch(console.error);
+
+  res.json(formatResponse({ caseId: targetCase.id }, 'Case review completed and logged.'));
 }));
 
-// 8. Approve Chargesheet & Close Case (Superintendent)
-router.post('/approve-chargesheet', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SUPERINTENDENT'), asyncHandler(async (req: any, res: any) => {
-  const { caseId } = req.body;
+// 8. Approve Chargesheet & Case Status Transition (Superintendent)
+const handleApproveChargesheet = async (req: any, res: any) => {
+  const { caseId, remarks } = req.body;
+  if (!caseId) throw new ApiError(400, 'Missing caseId.');
 
-  const closedCase = await prisma.case.update({
-    where: { id: caseId },
-    data: {
-      status: 'Solved'
-    }
+  const targetCase = await resolveCaseSafely(caseId);
+
+  // Status transitions: FORENSIC_APPROVED -> READY_FOR_CHARGESHEET -> CLOSED
+  let newStatus: any = 'READY_FOR_CHARGESHEET';
+  if (targetCase.status === 'READY_FOR_CHARGESHEET' || targetCase.status === 'Active') {
+    newStatus = 'CLOSED';
+  } else if (targetCase.status === 'UNDER_FORENSIC_REVIEW') {
+    newStatus = 'FORENSIC_APPROVED';
+  } else if (targetCase.status === 'FORENSIC_APPROVED') {
+    newStatus = 'READY_FOR_CHARGESHEET';
+  }
+
+  const updatedCase = await prisma.case.update({
+    where: { id: targetCase.id },
+    data: { status: newStatus as any }
   });
 
-  await logWorkflowAction(req, req.user.officerId, req.user.role, 'Chargesheet Approved', `Chargesheet approved and Case ${caseId} marked SOLVED.`, caseId);
+  // Update linked FIR status
+  await prisma.fir.updateMany({
+    where: { OR: [{ id: targetCase.id }, { case: { id: targetCase.id } }] },
+    data: { status: newStatus }
+  }).catch(console.error);
+
+  await logWorkflowAction(req, req.user.officerId, req.user.role, 'Chargesheet Approved', `Superintendent approved case ${targetCase.id}. New Status: ${newStatus}. Remarks: ${remarks || 'None'}`, targetCase.id);
   
   await prisma.timeline.create({
     data: {
-      caseId,
-      step: 'Case Closed & Resolved',
+      caseId: targetCase.id,
+      step: 'Superintendent Approval Granted',
       completed: true,
-      details: 'Chargesheet approved by Superintendent. Status: SOLVED.'
+      details: `Chargesheet & Investigation File Approved by Superintendent ${req.user.name}. Status transitioned to ${newStatus}.${remarks ? ' Remarks: ' + remarks : ''}`
     }
   });
 
-  await NotificationService.notifyAll(`Case Closed: Superintendent approved chargesheet. Case ${caseId} marked SOLVED.`, 'System').catch(console.error);
+  if (targetCase.officerId) {
+    await prisma.notification.create({
+      data: {
+        userId: targetCase.officerId,
+        message: `Superintendent ${req.user.name} approved Case ${targetCase.id}. Status: ${newStatus}.`,
+        type: 'Alert'
+      }
+    }).catch(console.error);
+  }
 
-  res.json(formatResponse(closedCase, 'Chargesheet approved and case closed successfully.'));
+  await NotificationService.notifyRole('INSPECTOR', `Case ${targetCase.id} approved by Superintendent. Status: ${newStatus}.`, 'Info').catch(console.error);
+
+  res.json(formatResponse(updatedCase, `Superintendent approval granted. Case status updated to ${newStatus}.`));
+};
+
+router.post('/approve-chargesheet', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SUPERINTENDENT'), asyncHandler(handleApproveChargesheet));
+router.post('/sp/approve', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SUPERINTENDENT'), asyncHandler(handleApproveChargesheet));
+
+// 8b. Reject Case / Investigation (Superintendent)
+router.post('/sp/reject', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SUPERINTENDENT'), asyncHandler(async (req: any, res: any) => {
+  const { caseId, reason } = req.body;
+  if (!caseId || !reason) throw new ApiError(400, 'Missing caseId or rejection reason.');
+
+  const targetCase = await resolveCaseSafely(caseId);
+
+  const updatedCase = await prisma.case.update({
+    where: { id: targetCase.id },
+    data: { status: 'REJECTED_BY_SP' }
+  });
+
+  await prisma.fir.updateMany({
+    where: { OR: [{ id: targetCase.id }, { case: { id: targetCase.id } }] },
+    data: { status: 'REJECTED_BY_SP' }
+  }).catch(console.error);
+
+  await logWorkflowAction(req, req.user.officerId, req.user.role, 'Investigation Rejected', `Superintendent rejected Case ${targetCase.id}. Reason: ${reason}`, targetCase.id);
+
+  await prisma.timeline.create({
+    data: {
+      caseId: targetCase.id,
+      step: 'Investigation Rejected by Superintendent',
+      completed: true,
+      details: `Superintendent ${req.user.name} rejected case file. Reason: "${reason}"`
+    }
+  });
+
+  if (targetCase.officerId) {
+    await prisma.notification.create({
+      data: {
+        userId: targetCase.officerId,
+        message: `Superintendent ${req.user.name} rejected Case ${targetCase.id}. Reason: "${reason}"`,
+        type: 'Alert'
+      }
+    }).catch(console.error);
+  }
+
+  await NotificationService.notifyRole('INSPECTOR', `Case ${targetCase.id} rejected by Superintendent. Reason: ${reason}`, 'Alert').catch(console.error);
+
+  res.json(formatResponse(updatedCase, 'Investigation rejected by Superintendent and returned to officer.'));
+}));
+
+// 8c. Request Changes / Additional Investigation (Superintendent)
+router.post('/sp/request-changes', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SUPERINTENDENT'), asyncHandler(async (req: any, res: any) => {
+  const { caseId, instructions } = req.body;
+  if (!caseId || !instructions) throw new ApiError(400, 'Missing caseId or change instructions.');
+
+  const targetCase = await resolveCaseSafely(caseId);
+
+  const updatedCase = await prisma.case.update({
+    where: { id: targetCase.id },
+    data: { status: 'ADDITIONAL_INVESTIGATION_REQUIRED' }
+  });
+
+  await prisma.fir.updateMany({
+    where: { OR: [{ id: targetCase.id }, { case: { id: targetCase.id } }] },
+    data: { status: 'REVISION_REQUESTED' }
+  }).catch(console.error);
+
+  await logWorkflowAction(req, req.user.officerId, req.user.role, 'Changes Requested', `Superintendent requested changes for Case ${targetCase.id}. Instructions: ${instructions}`, targetCase.id);
+
+  await prisma.timeline.create({
+    data: {
+      caseId: targetCase.id,
+      step: 'Superintendent Requested Changes',
+      completed: true,
+      details: `Superintendent ${req.user.name} requested additional investigation: "${instructions}"`
+    }
+  });
+
+  if (targetCase.officerId) {
+    await prisma.notification.create({
+      data: {
+        userId: targetCase.officerId,
+        message: `Superintendent ${req.user.name} requested changes for Case ${targetCase.id}: "${instructions}"`,
+        type: 'Alert'
+      }
+    }).catch(console.error);
+  }
+
+  await NotificationService.notifyRole('INSPECTOR', `Superintendent requested changes for Case ${targetCase.id}: ${instructions}`, 'Alert').catch(console.error);
+
+  res.json(formatResponse(updatedCase, 'Change request sent to investigating officer successfully.'));
 }));
 
 // 9. Add Investigation Note (Inspector / Sub Inspector / Super Admin)

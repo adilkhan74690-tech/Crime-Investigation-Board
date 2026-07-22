@@ -1126,14 +1126,12 @@ function openCaseDetail(caseId) {
     actionsContainer.innerHTML = '';
     if (activeRole === 'SUPER_ADMIN' || activeRole === 'SUPERINTENDENT') {
       actionsContainer.innerHTML += `
+        <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--success-color);" onclick="spApproveCase('${target.id}')"><i class="ri-checkbox-circle-line"></i> Approve Case / Chargesheet</button>
+        <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--warning-color);" onclick="spRequestChanges('${target.id}')"><i class="ri-edit-line"></i> Request Changes</button>
+        <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--danger-color);" onclick="spRejectCase('${target.id}')"><i class="ri-close-circle-line"></i> Reject Investigation</button>
         <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--border-light);" onclick="showAssignInspectorModal('${target.id}')"><i class="ri-user-shared-line"></i> Assign Inspector</button>
-        <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--warning-color);" onclick="showReviewCaseModal('${target.id}')"><i class="ri-survey-line"></i> Log Case Review</button>
+        <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--surface-color); border: 1px solid var(--border-color);" onclick="showReviewCaseModal('${target.id}')"><i class="ri-survey-line"></i> Log Review Notes</button>
       `;
-      if (target.status === 'Active' || target.status === 'UNDER_FORENSIC_REVIEW') {
-        actionsContainer.innerHTML += `
-          <button class="btn-primary" style="width: auto; padding: 8px 16px; font-size: 12px; background-color: var(--success-color);" onclick="approveChargesheet('${target.id}')"><i class="ri-checkbox-circle-line"></i> Approve Chargesheet & Close</button>
-        `;
-      }
     }
     
     if ((activeRole === 'INSPECTOR' || activeRole === 'SUB_INSPECTOR') && isAssigned) {
@@ -4373,6 +4371,89 @@ async function forwardCaseToSuperintendent(caseId) {
   }
 }
 
+async function spApproveCase(caseId) {
+  if (!confirm(`Are you sure you want to APPROVE Case ${caseId} and advance its status?`)) return;
+
+  const token = sessionStorage.getItem('cib_jwt_token');
+  try {
+    const res = await fetch('/api/workflow/sp/approve', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ caseId })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      triggerToast(data.message || "Superintendent approval granted.", "success");
+      await initDashboard();
+      openCaseDetail(caseId);
+    } else {
+      triggerToast(data.error || "Approval failed.", "danger");
+    }
+  } catch (err) {
+    console.error(err);
+    triggerToast("Server connection error.", "danger");
+  }
+}
+
+async function spRequestChanges(caseId) {
+  const instructions = prompt("Enter specific change instructions / additional investigation required:");
+  if (instructions === null || !instructions.trim()) return;
+
+  const token = sessionStorage.getItem('cib_jwt_token');
+  try {
+    const res = await fetch('/api/workflow/sp/request-changes', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ caseId, instructions: instructions.trim() })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      triggerToast("Change request sent to investigating officer.", "success");
+      await initDashboard();
+      openCaseDetail(caseId);
+    } else {
+      triggerToast(data.error || "Failed to request changes.", "danger");
+    }
+  } catch (err) {
+    console.error(err);
+    triggerToast("Server connection error.", "danger");
+  }
+}
+
+async function spRejectCase(caseId) {
+  const reason = prompt("Enter official rejection reason:");
+  if (reason === null || !reason.trim()) return;
+
+  const token = sessionStorage.getItem('cib_jwt_token');
+  try {
+    const res = await fetch('/api/workflow/sp/reject', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ caseId, reason: reason.trim() })
+    });
+    const data = await res.json();
+    if (res.ok && data.success) {
+      triggerToast("Case investigation rejected by Superintendent.", "success");
+      await initDashboard();
+      openCaseDetail(caseId);
+    } else {
+      triggerToast(data.error || "Rejection failed.", "danger");
+    }
+  } catch (err) {
+    console.error(err);
+    triggerToast("Server connection error.", "danger");
+  }
+}
+
 window.handleFirstLoginPasswordChangeSubmit = handleFirstLoginPasswordChangeSubmit;
 window.showNotificationCenter = showNotificationCenter;
 window.markAllNotificationsRead = markAllNotificationsRead;
@@ -4387,5 +4468,8 @@ window.deleteCaseNote = deleteCaseNote;
 window.acceptForensicReport = acceptForensicReport;
 window.returnForensicReport = returnForensicReport;
 window.forwardCaseToSuperintendent = forwardCaseToSuperintendent;
+window.spApproveCase = spApproveCase;
+window.spRequestChanges = spRequestChanges;
+window.spRejectCase = spRejectCase;
 
 
