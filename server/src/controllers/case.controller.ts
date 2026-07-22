@@ -60,15 +60,19 @@ export class CaseController {
       });
     }
     const formatted = list.map((c: any) => {
+      const isClosed = c.status === 'CLOSED' || c.status === 'Closed' || c.status === 'Solved';
       const hasForensic = c.forensics && c.forensics.length > 0;
-      const isUnderForensicReview = hasForensic || (c.fir && c.fir.status === 'UNDER_FORENSIC_REVIEW');
+      const isUnderForensicReview = !isClosed && (c.status === 'UNDER_FORENSIC_REVIEW' || (c.fir && c.fir.status === 'UNDER_FORENSIC_REVIEW'));
+      
+      const resolvedStatus = isClosed ? 'CLOSED' : (isUnderForensicReview ? 'UNDER_FORENSIC_REVIEW' : c.status);
+      
       return {
         id: c.id,
         caseNumber: c.id,
         title: c.title,
         assignedOfficerId: c.officerId,
         officerId: c.officerId,
-        status: isUnderForensicReview ? 'UNDER_FORENSIC_REVIEW' : c.status,
+        status: resolvedStatus,
         priority: c.priority,
         crimeType: c.crimeType,
         location: c.location,
@@ -125,9 +129,12 @@ export class CaseController {
       throw new ApiError(404, 'Case record not found.');
     }
 
+    const isClosed = item.status === 'CLOSED' || item.status === 'Closed' || item.status === 'Solved';
     const hasForensic = item.forensics && item.forensics.length > 0;
-    const isUnderForensicReview = hasForensic || (item.fir && item.fir.status === 'UNDER_FORENSIC_REVIEW');
-    if (isUnderForensicReview) {
+    const isUnderForensicReview = !isClosed && (item.status === 'UNDER_FORENSIC_REVIEW' || (item.fir && item.fir.status === 'UNDER_FORENSIC_REVIEW'));
+    if (isClosed) {
+      item.status = 'CLOSED';
+    } else if (isUnderForensicReview) {
       item.status = 'UNDER_FORENSIC_REVIEW';
     }
     res.json(formatResponse(item));

@@ -1058,6 +1058,10 @@ function renderCasesTable(filteredList = null) {
       officerRole = linkedCase.assignedOfficer.user.role;
     }
 
+    const effectiveStatus = (linkedCase && (linkedCase.status === 'CLOSED' || linkedCase.status === 'Closed' || linkedCase.status === 'Solved')) 
+      ? linkedCase.status 
+      : (f.status || 'Registered');
+
     items.push({
       id: f.id,
       title: f.title,
@@ -1065,7 +1069,7 @@ function renderCasesTable(filteredList = null) {
       priority: linkedCase ? linkedCase.priority : 'Medium',
       assignedOfficer: officerName,
       assignedRole: officerRole,
-      status: f.status || 'Registered',
+      status: effectiveStatus,
       createdDate: f.createdAt || f.date,
       location: f.location || 'N/A',
       isFir: true,
@@ -1092,11 +1096,14 @@ function renderCasesTable(filteredList = null) {
     }
   });
 
-  const targetList = filteredList || items;
-  const total = targetList.length;
+  const isClosedStatus = (s) => s === 'CLOSED' || s === 'Closed' || s === 'Solved' || s === 'FORENSIC_APPROVED';
+  
+  // Active tables must only contain in-progress cases
+  const activeItems = (filteredList || items).filter(i => !isClosedStatus(i.status));
+  const total = activeItems.length;
   const startIndex = (casesPage - 1) * casesPageSize;
   const endIndex = startIndex + casesPageSize;
-  const paginated = targetList.slice(startIndex, endIndex);
+  const paginated = activeItems.slice(startIndex, endIndex);
 
   // Update ranges
   const rangeEl = document.getElementById('cases-pagination-range');
@@ -1967,11 +1974,18 @@ function renderForensicsLab() {
     tbody.innerHTML = '';
     const forensics = window.CIB_DB.forensics || [];
     const evidenceList = window.CIB_DB.evidence || [];
+    const isClosedStatus = (s) => s === 'CLOSED' || s === 'Closed' || s === 'Solved' || s === 'FORENSIC_APPROVED';
+
+    const activeForensics = forensics.filter(f => {
+      const linkedCase = (window.CIB_DB.cases || []).find(c => c.id === f.caseId || c.firId === f.caseId);
+      if (linkedCase && isClosedStatus(linkedCase.status)) return false;
+      return !isClosedStatus(f.status);
+    });
     
-    if (forensics.length === 0) {
+    if (activeForensics.length === 0) {
       tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 24px;">No pending forensic requests or assigned evidence in laboratory queue.</td></tr>`;
     } else {
-      forensics.forEach(f => {
+      activeForensics.forEach(f => {
         const tr = document.createElement('tr');
         
         // Find linked Evidence or details
@@ -4316,12 +4330,13 @@ async function handleReviewCaseSubmitOnly() {
 
 function renderSuperintendentRegistries() {
   const cases = window.CIB_DB.cases || [];
+  const isClosed = (s) => s === 'CLOSED' || s === 'Closed' || s === 'Solved' || s === 'FORENSIC_APPROVED';
 
   // 1. Review Cases Table
   const reviewTbody = document.getElementById('sp-review-cases-tbody');
   if (reviewTbody) {
     reviewTbody.innerHTML = '';
-    const activeCases = cases.filter(c => c.status !== 'Closed' && c.status !== 'Solved');
+    const activeCases = cases.filter(c => !isClosed(c.status));
     if (activeCases.length === 0) {
       reviewTbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 20px;">No active cases awaiting Superintendent review.</td></tr>';
     } else {
@@ -4350,7 +4365,7 @@ function renderSuperintendentRegistries() {
   const csTbody = document.getElementById('sp-chargesheet-tbody');
   if (csTbody) {
     csTbody.innerHTML = '';
-    const csReady = cases.filter(c => c.status === 'READY_FOR_CHARGESHEET' || c.status === 'Forensic Report Submitted' || c.status === 'UNDER_FORENSIC_REVIEW' || c.status === 'Active');
+    const csReady = cases.filter(c => (c.status === 'READY_FOR_CHARGESHEET' || c.status === 'Forensic Report Submitted' || c.status === 'UNDER_FORENSIC_REVIEW' || c.status === 'Active') && !isClosed(c.status));
     if (csReady.length === 0) {
       csTbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-secondary); padding: 20px;">No cases currently awaiting chargesheet sign-off.</td></tr>';
     } else {
@@ -4382,7 +4397,7 @@ function renderSuperintendentRegistries() {
   const closeTbody = document.getElementById('sp-close-cases-tbody');
   if (closeTbody) {
     closeTbody.innerHTML = '';
-    const closedCases = cases.filter(c => c.status === 'Solved' || c.status === 'Closed' || c.status === 'FORENSIC_APPROVED');
+    const closedCases = cases.filter(c => isClosed(c.status));
     if (closedCases.length === 0) {
       closeTbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-secondary); padding: 20px;">No solved or closed cases archived yet.</td></tr>';
     } else {
@@ -4393,7 +4408,7 @@ function renderSuperintendentRegistries() {
           <td style="font-family: monospace; font-weight: 700; color: var(--primary-color);">${c.id}</td>
           <td style="font-weight: 600; color: #FFF;">${c.title}</td>
           <td>${closeDate}</td>
-          <td><span class="badge badge-status-solved" style="font-size:10px; padding:2px 8px;">${c.status}</span></td>
+          <td><span class="badge badge-status-solved" style="font-size:10px; padding:2px 8px; background-color: rgba(16, 185, 129, 0.2); color: #10B981; border: 1px solid #10B981; font-weight: 700;">CASE CLOSED</span></td>
         `;
         closeTbody.appendChild(row);
       });
@@ -4404,10 +4419,11 @@ function renderSuperintendentRegistries() {
   const assignTbody = document.getElementById('sp-assign-officers-tbody');
   if (assignTbody) {
     assignTbody.innerHTML = '';
-    if (cases.length === 0) {
+    const activeAssignCases = cases.filter(c => !isClosed(c.status));
+    if (activeAssignCases.length === 0) {
       assignTbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-secondary); padding: 20px;">No active cases registered.</td></tr>';
     } else {
-      cases.forEach(c => {
+      activeAssignCases.forEach(c => {
         const officerName = c.assignedOfficer?.user?.name || c.assignedOfficer?.name || c.officerId || 'Unassigned';
         const row = document.createElement('tr');
         row.innerHTML = `
