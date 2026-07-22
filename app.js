@@ -585,6 +585,8 @@ function initApexCharts() {
     });
   }
   
+  const isClosedStatus = (s) => s === 'CLOSED' || s === 'Closed' || s === 'Solved' || s === 'FORENSIC_APPROVED';
+
   // Set sample incidents/resolved curve if empty
   if (!hasCases) {
     incidents[0] = 4; incidents[1] = 6; incidents[2] = 5; incidents[3] = 9; incidents[4] = 8; incidents[5] = 12;
@@ -598,7 +600,7 @@ function initApexCharts() {
       const mIdx = last6Months.findIndex(m => m.monthIndex === cMonth && m.year === cYear);
       if (mIdx !== -1) {
         incidents[mIdx]++;
-        if (c.status === 'Solved') {
+        if (isClosedStatus(c.status)) {
           resolved[mIdx]++;
         }
       }
@@ -607,17 +609,25 @@ function initApexCharts() {
 
   const categories = last6Months.map(m => m.name);
 
-  // Group by crime type
+  // Group by crime type dynamically from PostgreSQL cases & FIRs
   const crimeTypeCounts = {};
   casesToAnalyze.forEach(c => {
-    crimeTypeCounts[c.crimeType] = (crimeTypeCounts[c.crimeType] || 0) + 1;
+    const type = c.crimeType || c.crimeCategory || 'General';
+    crimeTypeCounts[type] = (crimeTypeCounts[type] || 0) + 1;
   });
-  const crimeLabels = Object.keys(crimeTypeCounts);
-  const crimeSeries = Object.values(crimeTypeCounts);
+  (window.CIB_DB.firs || []).forEach(f => {
+    const type = f.crimeCategory || 'General';
+    if (!casesToAnalyze.some(c => c.firId === f.id || c.id === f.case?.id)) {
+      crimeTypeCounts[type] = (crimeTypeCounts[type] || 0) + 1;
+    }
+  });
+
+  const crimeLabels = Object.keys(crimeTypeCounts).length > 0 ? Object.keys(crimeTypeCounts) : ['General'];
+  const crimeSeries = Object.values(crimeTypeCounts).length > 0 ? Object.values(crimeTypeCounts) : [0];
 
   // Pending vs Solved
-  const solvedCount = casesToAnalyze.filter(c => c.status === 'Solved').length;
-  const activeCount = casesToAnalyze.filter(c => c.status === 'Active').length;
+  const solvedCount = casesToAnalyze.filter(c => isClosedStatus(c.status)).length;
+  const activeCount = casesToAnalyze.filter(c => !isClosedStatus(c.status)).length;
 
   // Evidence Counts
   const evCounts = { 'DigitalHardware': 0, 'Weapon': 0, 'Document': 0, 'Narcotics': 0, 'Other': 0 };
@@ -939,9 +949,12 @@ function animateCounter(elementId, targetValue, duration = 800) {
 
 // Statistics counts
 function renderCounts() {
-  const activeCount = window.CIB_DB.kpis?.activeCases ?? window.CIB_DB.cases.filter(c => c.status === 'Active').length;
-  const solvedCount = window.CIB_DB.kpis?.closedCases ?? window.CIB_DB.cases.filter(c => c.status === 'Solved').length;
-  const highPriority = window.CIB_DB.cases.filter(c => c.priority === 'High' || c.priority === 'Critical').length;
+  const isClosedStatus = (s) => s === 'CLOSED' || s === 'Closed' || s === 'Solved' || s === 'FORENSIC_APPROVED';
+  const cases = window.CIB_DB.cases || [];
+
+  const activeCount = window.CIB_DB.kpis?.activeCases ?? cases.filter(c => !isClosedStatus(c.status)).length;
+  const solvedCount = window.CIB_DB.kpis?.closedCases ?? cases.filter(c => isClosedStatus(c.status)).length;
+  const highPriority = cases.filter(c => c.priority === 'High' || c.priority === 'Critical').length;
   const evidenceCount = window.CIB_DB.kpis?.evidenceFiles ?? (window.CIB_DB.evidence || []).length;
   
   animateCounter('count-active', activeCount);
@@ -953,22 +966,22 @@ function renderCounts() {
   const activeRole = sessionStorage.getItem('cib_officer_role');
 
   if (activeRole === 'SUB_INSPECTOR') {
-    const ioAssigned = window.CIB_DB.cases.filter(c => c.officerId === currentOfficerId || c.createdBy === currentOfficerId).length;
-    const ioEvidence = window.CIB_DB.evidence.length;
+    const ioAssigned = cases.filter(c => c.officerId === currentOfficerId || c.createdBy === currentOfficerId).length;
+    const ioEvidence = (window.CIB_DB.evidence || []).length;
     animateCounter('io-assigned-count', ioAssigned);
     animateCounter('io-evidence-count', ioEvidence);
   }
 
   if (activeRole === 'FORENSIC_OFFICER') {
-    const foPending = window.CIB_DB.forensics.filter(f => f.status === 'Pending Analysis').length;
-    const foCompleted = window.CIB_DB.forensics.filter(f => f.status === 'Approved' || f.status === 'Forensic Report Submitted').length;
+    const foPending = (window.CIB_DB.forensics || []).filter(f => f.status === 'Pending Analysis').length;
+    const foCompleted = (window.CIB_DB.forensics || []).filter(f => f.status === 'Approved' || f.status === 'Forensic Report Submitted').length;
     animateCounter('fo-pending-requests', foPending);
     animateCounter('fo-completed-profiles', foCompleted);
   }
 
   if (activeRole === 'SUPERINTENDENT') {
-    const spAwaiting = window.CIB_DB.kpis?.pendingReviews ?? window.CIB_DB.forensics.filter(f => f.status !== 'Approved').length;
-    const spSolved = window.CIB_DB.kpis?.closedCases ?? window.CIB_DB.cases.filter(c => c.status === 'Solved').length;
+    const spAwaiting = cases.filter(c => !isClosedStatus(c.status)).length;
+    const spSolved = cases.filter(c => isClosedStatus(c.status)).length;
     animateCounter('sp-awaiting-review', spAwaiting);
     animateCounter('sp-solved-cases', spSolved);
   }
