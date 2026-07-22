@@ -45,47 +45,57 @@ export async function logAudit(
   details: string,
   caseId?: string
 ) {
-  const ipAddress = req.ip || req.headers['x-forwarded-for'] || '127.0.0.1';
-  const userAgent = req.headers['user-agent'] || '';
-  const { browser, device } = parseUserAgent(userAgent);
+  try {
+    const ipAddress = req.ip || req.headers['x-forwarded-for'] || '127.0.0.1';
+    const userAgent = req.headers['user-agent'] || '';
+    const { browser, device } = parseUserAgent(userAgent);
 
-  // 1. Audit Log (Never editable / Only insert allowed)
-  await prisma.auditLog.create({
-    data: {
-      userId,
-      role,
-      ipAddress: Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
-      action,
-      details,
-      browser,
-      device
+    let validUserId: string | null = null;
+    if (userId) {
+      const uExists = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } }).catch(() => null);
+      if (uExists) validUserId = userId;
     }
-  });
 
-  // 2. Activity Log
-  if (userId) {
-    await prisma.activityLog.create({
-      data: { userId, action }
-    }).catch(console.error);
-  }
-
-  // 3. Notification
-  if (userId) {
-    await prisma.notification.create({
-      data: { userId, message: `${action}: ${details}` }
-    }).catch(console.error);
-  }
-
-  // 4. Case Timeline (if caseId is provided)
-  if (caseId) {
-    await prisma.timeline.create({
+    // 1. Audit Log (Never editable / Only insert allowed)
+    await prisma.auditLog.create({
       data: {
-        caseId,
-        step: action,
-        date: new Date(),
-        completed: true,
-        details
+        userId: validUserId,
+        role,
+        ipAddress: Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
+        action,
+        details,
+        browser,
+        device
       }
-    }).catch(console.error);
+    }).catch(err => console.error('[logAudit] AuditLog error:', err.message));
+
+    // 2. Activity Log
+    if (validUserId) {
+      await prisma.activityLog.create({
+        data: { userId: validUserId, action }
+      }).catch(err => console.error('[logAudit] ActivityLog error:', err.message));
+    }
+
+    // 3. Notification
+    if (validUserId) {
+      await prisma.notification.create({
+        data: { userId: validUserId, message: `${action}: ${details}` }
+      }).catch(err => console.error('[logAudit] Notification error:', err.message));
+    }
+
+    // 4. Case Timeline (if caseId is provided)
+    if (caseId) {
+      await prisma.timeline.create({
+        data: {
+          caseId,
+          step: action,
+          date: new Date(),
+          completed: true,
+          details
+        }
+      }).catch(err => console.error('[logAudit] Timeline error:', err.message));
+    }
+  } catch (err: any) {
+    console.error('[logAudit] System exception:', err.message);
   }
 }

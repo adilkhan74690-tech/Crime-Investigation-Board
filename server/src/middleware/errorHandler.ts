@@ -14,5 +14,6 @@ export const errorHandler = (err: Error, req: Request, res: Response, next: Next
     return res.status(400).json(formatError('Data validation parameters parsing exception.'));
   }
 
-  return res.status(500).json(formatError('Internal Server Error. Security system audit logged.'));
+  const errorMessage = err.message || 'Internal Server Error. Security system audit logged.';
+  return res.status(500).json(formatError(errorMessage));
 };

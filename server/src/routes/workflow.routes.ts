@@ -264,37 +264,49 @@ router.post('/sp/approve', authenticateToken, authorizeRoles('SUPER_ADMIN', 'SUP
 
 async function handleApproveChargesheet(req: any, res: any) {
   const { caseId } = req.body;
-  if (!caseId) throw new ApiError(400, 'Missing caseId.');
+  if (!caseId) throw new ApiError(400, 'Missing caseId in approval request.');
 
   const targetCase = await prisma.case.findFirst({
     where: { OR: [{ id: caseId }, ...(caseId ? [{ firId: caseId }] : [])] }
   });
 
-  if (!targetCase) throw new ApiError(404, `Case ${caseId} not found.`);
+  if (!targetCase) throw new ApiError(404, `Case file ${caseId} not found in database.`);
 
+  const currentStatus = targetCase.status;
   const newStatus = 'FORENSIC_APPROVED';
 
+  // 1. Update Case Status in PostgreSQL
   const updatedCase = await prisma.case.update({
     where: { id: targetCase.id },
-    data: { status: newStatus }
+    data: { status: newStatus as any }
   });
 
-  await prisma.fir.updateMany({
-    where: { OR: [{ id: targetCase.id }, ...(targetCase.firId ? [{ id: targetCase.firId }] : [])] },
-    data: { status: newStatus }
-  }).catch(console.error);
+  // 2. Update FIR Status if linked
+  if (targetCase.firId || targetCase.id) {
+    await prisma.fir.updateMany({
+      where: { OR: [{ id: targetCase.id }, ...(targetCase.firId ? [{ id: targetCase.firId }] : [])] },
+      data: { status: newStatus }
+    }).catch(console.error);
+  }
 
+  // 3. Record Timeline Step
   await prisma.timeline.create({
     data: {
       caseId: targetCase.id,
       step: 'Chargesheet Approved',
       completed: true,
-      details: `Chargesheet approved by Superintendent ${req.user.name}. Case marked as ${newStatus}.`
+      details: `Chargesheet approved by Superintendent ${req.user?.name || 'Officer'}. Status updated from ${currentStatus} to ${newStatus}.`
     }
-  });
+  }).catch(console.error);
 
-  await logWorkflowAction(req, req.user.officerId, req.user.role, 'Chargesheet Approved', `SP approved chargesheet for case ${targetCase.id}`, targetCase.id);
+  // 4. Record Audit Log
+  const activeUserId = req.user?.officerId || req.user?.id || null;
+  const activeRole = req.user?.role || 'SUPERINTENDENT';
+  await logWorkflowAction(req, activeUserId, activeRole, 'Chargesheet Approved', `Superintendent approved chargesheet for Case ${targetCase.id}. Status: ${newStatus}`, targetCase.id).catch(console.error);
+
+  // 5. Broadcast Socket.IO Realtime Events & Role Notifications
   await NotificationService.notifyRole('SUB_INSPECTOR', `Case ${targetCase.id} approved by Superintendent. Status: ${newStatus}.`, 'Info').catch(console.error);
+  await NotificationService.notifyAll(`Case ${targetCase.id} chargesheet approved and moved to ${newStatus}.`, 'Info').catch(console.error);
 
   res.json(formatResponse(updatedCase, 'Chargesheet approved and case status updated successfully.'));
 }
