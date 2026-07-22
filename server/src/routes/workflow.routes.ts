@@ -298,17 +298,45 @@ router.post('/request-forensic', authenticateToken, authorizeRoles('SUPER_ADMIN'
     data: { status: 'UNDER_FORENSIC_REVIEW' }
   }).catch(console.error);
 
+  // Assign Forensic Officer if available in database
+  const forensicUser = await prisma.user.findFirst({
+    where: { role: 'FORENSIC_OFFICER' }
+  });
+
   const forensicReportId = reportId || `FOR-2026-${Math.floor(100 + Math.random() * 900)}`;
   const forensicReport = await prisma.forensicReport.create({
     data: {
       id: forensicReportId,
       caseId: targetCase.id,
       type: type || 'Digital Forensics',
-      analyst: 'Pending Assignment',
+      analyst: forensicUser ? forensicUser.name : 'Pending Assignment',
+      forensicOfficerId: forensicUser ? forensicUser.id : null,
+      reportTitle: `Forensic Analysis Request - ${type || 'Digital Forensics'}`,
       summary: summary || 'Forensic laboratory analysis requested by investigating officer.',
       status: 'Pending Analysis'
     }
   }).catch((e: any) => console.log('[DEBUG WORKFLOW] Forensic report note:', e.message));
+
+  // Update Evidence Chain of Custody & Evidence Transfers
+  await prisma.evidence.updateMany({
+    where: { caseId: targetCase.id },
+    data: { chainOfCustodyStatus: 'Transferred to Digital Forensics Unit for Lab Analysis' }
+  }).catch(console.error);
+
+  const caseEvidences = await prisma.evidence.findMany({ where: { caseId: targetCase.id } });
+  for (const ev of caseEvidences) {
+    await prisma.evidenceTransfer.create({
+      data: {
+        evidenceId: ev.id,
+        action: 'Transferred to Digital Forensics Unit for Analysis',
+        handler: `${req.user.name} (${req.user.role})`
+      }
+    }).catch(() => {});
+  }
+
+  // Generate Notifications
+  await NotificationService.notifyRole('FORENSIC_OFFICER', `New Forensic Analysis requested for Case ${targetCase.id}: ${summary || type}`, 'Alert').catch(console.error);
+  await NotificationService.notifyRole('INSPECTOR', `Case ${targetCase.id} sent to Digital Forensics Lab by ${req.user.name}.`, 'Info').catch(console.error);
 
   console.log('[DEBUG WORKFLOW] Forensic report created:', forensicReportId);
 
