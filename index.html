@@ -586,42 +586,35 @@
       <main id="view-fo-pending" class="page-container">
         <div class="page-header">
           <div>
-            <h2 class="page-title">Forensic Lab Workspaces</h2>
-            <p style="color: var(--text-secondary); font-size: 14px;">DNA Swabs, Fingerprint Matches, Autopsies, Ballistic Scans & Chemical Analyses</p>
+            <h2 class="page-title">Assigned Forensic Requests & Evidence Queue</h2>
+            <p style="color: var(--text-secondary); font-size: 14px;">Review assigned digital evidence artifacts, laboratory requests, and upload report findings.</p>
           </div>
         </div>
 
-        <div class="forensics-grid" id="forensics-grid-container">
-          <!-- Loaded dynamically -->
+        <!-- Assigned Evidence & Requests Table -->
+        <div class="data-table-container" style="margin-bottom: 24px;">
+          <table class="enterprise-table">
+            <thead>
+              <tr>
+                <th>Evidence</th>
+                <th>Case</th>
+                <th>Sender</th>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="fo-pending-tbody">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
         </div>
 
-        <div class="chart-card" style="margin-top: 32px;">
-          <h3 style="font-size: 16px; margin-bottom: 16px;">Upload Forensic Report Findings</h3>
-          <form onsubmit="handleForensicUpload(event)" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-            <div class="form-group">
-              <label class="form-label">Related Case</label>
-              <select class="form-input" id="forenic-upload-case" required>
-                <option value="CASE-2026-081">CASE-2026-081 (Midnight Syndicate Heist)</option>
-                <option value="CASE-2026-102">CASE-2026-102 (Holloway Warehouse Homicide)</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Analysis Type</label>
-              <select class="form-input" id="forenic-upload-type" required>
-                <option>Fingerprint Verification</option>
-                <option>DNA Profile Swab Match</option>
-                <option>Ballistics Striation Scan</option>
-                <option>Autopsy Toxicology Report</option>
-              </select>
-            </div>
-            <div class="form-group" style="grid-column: span 2;">
-              <label class="form-label">Summary Findings</label>
-              <textarea class="form-input" id="forensic-upload-summary" rows="3" placeholder="Enter formal analysis findings and database match logs..." required></textarea>
-            </div>
-            <div style="grid-column: span 2; display: flex; justify-content: flex-end;">
-              <button type="submit" class="btn-primary" style="width: auto;">Submit For Board Approval</button>
-            </div>
-          </form>
+        <div style="margin-top: 24px;">
+          <h3 style="font-size: 16px; margin-bottom: 16px; color: #FFF;">Forensic Lab Reports & Analysis Archive</h3>
+          <div class="forensics-grid" id="forensics-grid-container">
+            <!-- Loaded dynamically -->
+          </div>
         </div>
       </main>
 
@@ -1953,30 +1946,38 @@
 
   <!-- Submit Forensic Findings Modal -->
   <div id="modal-submit-forensic" class="modal-overlay">
-    <div class="modal-container">
+    <div class="modal-container" style="max-width: 650px; width: 90%;">
       <div class="modal-header">
-        <h3 class="modal-title"><i class="ri-file-upload-line"></i> Upload Forensic Report & Findings</h3>
+        <h3 class="modal-title"><i class="ri-file-upload-line"></i> Upload Forensic Report Findings</h3>
         <button class="modal-close-btn" onclick="hideModal('modal-submit-forensic')"><i class="ri-close-line"></i></button>
       </div>
       <form id="submit-forensic-form" onsubmit="handleSubmitForensicSubmit(event)">
         <input type="hidden" id="submit-report-id">
         <input type="hidden" id="submit-report-case-id">
-        <div class="modal-body" style="display: flex; flex-direction: column; gap: 16px;">
+        <div class="modal-body" style="display: flex; flex-direction: column; gap: 16px; max-height: 70vh; overflow-y: auto;">
           <div class="form-group">
             <label class="form-label" for="submit-forensic-title">Report Title</label>
-            <input type="text" id="submit-forensic-title" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" placeholder="e.g. Comprehensive DNA Panel Match Report" required>
+            <input type="text" id="submit-forensic-title" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" placeholder="e.g. Comprehensive Fingerprint Analysis Report" required>
           </div>
           <div class="form-group">
             <label class="form-label" for="submit-forensic-file">Attach Report Document (PDF, DOCX, Images)</label>
-            <input type="file" id="submit-forensic-file" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" accept=".pdf,.docx,image/*">
+            <input type="file" id="submit-forensic-file" class="form-input" style="width: 100%; padding: 10px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px;" accept=".pdf,.docx,image/*" required>
           </div>
           <div class="form-group">
-            <label class="form-label" for="submit-forensic-summary">Laboratory Findings & Observations</label>
-            <textarea id="submit-forensic-summary" class="form-input" style="width: 100%; padding: 10px; height: 100px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px; resize: none;" placeholder="Detailed forensic observations and conclusions..." required></textarea>
+            <label class="form-label" for="submit-forensic-findings">Laboratory Findings</label>
+            <textarea id="submit-forensic-findings" class="form-input" style="width: 100%; padding: 10px; height: 80px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px; resize: none;" placeholder="Detailed forensic laboratory findings & database match details..." required></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="submit-forensic-recommendation">Expert Recommendation</label>
+            <textarea id="submit-forensic-recommendation" class="form-input" style="width: 100%; padding: 10px; height: 70px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px; resize: none;" placeholder="Expert forensic recommendation for investigation team..."></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="submit-forensic-remarks">Chain of Custody & Remarks</label>
+            <textarea id="submit-forensic-remarks" class="form-input" style="width: 100%; padding: 10px; height: 60px; background-color: var(--card-color); border: 1px solid var(--border-color); color: #FFF; border-radius: 6px; resize: none;" placeholder="Additional lab notes or chain of custody remarks..."></textarea>
           </div>
           <div id="forensic-progress-container" style="display: none; flex-direction: column; gap: 6px;">
             <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary);">
-              <span>Uploading Forensic Report...</span>
+              <span>Uploading Forensic Report PDF to Cloudinary...</span>
               <span id="forensic-progress-text">0%</span>
             </div>
             <div style="width: 100%; background: var(--border-color); height: 8px; border-radius: 4px; overflow: hidden;">

@@ -317,10 +317,13 @@ router.post('/request-forensic', authenticateToken, authorizeRoles('SUPER_ADMIN'
     }
   }).catch((e: any) => console.log('[DEBUG WORKFLOW] Forensic report note:', e.message));
 
-  // Update Evidence Chain of Custody & Evidence Transfers
+  // Update Evidence Status & Chain of Custody
   await prisma.evidence.updateMany({
     where: { caseId: targetCase.id },
-    data: { chainOfCustodyStatus: 'Transferred to Digital Forensics Unit for Lab Analysis' }
+    data: { 
+      chainOfCustodyStatus: 'Transferred to Digital Forensics Unit for Lab Analysis',
+      verificationStatus: 'Under Forensic Review'
+    }
   }).catch(console.error);
 
   const caseEvidences = await prisma.evidence.findMany({ where: { caseId: targetCase.id } });
@@ -333,6 +336,16 @@ router.post('/request-forensic', authenticateToken, authorizeRoles('SUPER_ADMIN'
       }
     }).catch(() => {});
   }
+
+  // Create Timeline entry
+  await prisma.timeline.create({
+    data: {
+      caseId: targetCase.id,
+      step: 'Sent to Forensics',
+      completed: true,
+      details: `Case transferred to Digital Forensics Unit by ${req.user.name} (${req.user.role}). Request ID: ${forensicReportId}`
+    }
+  }).catch(console.error);
 
   // Generate Notifications
   await NotificationService.notifyRole('FORENSIC_OFFICER', `New Forensic Analysis requested for Case ${targetCase.id}: ${summary || type}`, 'Alert').catch(console.error);

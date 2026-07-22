@@ -1537,33 +1537,92 @@ function loadTimelineForCase(caseId) {
   });
 }
 
-// Forensics Lab Reports list & upload handler
+// Forensics Lab Reports list & assigned evidence queue handler
 function renderForensicsLab() {
+  // 1. Populate Assigned Evidence & Requests Table (fo-pending-tbody)
+  const tbody = document.getElementById('fo-pending-tbody');
+  if (tbody) {
+    tbody.innerHTML = '';
+    const forensics = window.CIB_DB.forensics || [];
+    const evidenceList = window.CIB_DB.evidence || [];
+    
+    if (forensics.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-secondary); padding: 24px;">No pending forensic requests or assigned evidence in laboratory queue.</td></tr>`;
+    } else {
+      forensics.forEach(f => {
+        const tr = document.createElement('tr');
+        
+        // Find linked Evidence or details
+        const linkedEv = evidenceList.find(e => e.caseId === f.caseId) || { name: f.type || 'Digital Evidence', category: f.type };
+        const dateStr = f.createdAt ? new Date(f.createdAt).toLocaleDateString() : (f.approvalDate || 'N/A');
+        const senderStr = f.case?.assignedOfficer?.name || f.analyst || 'Investigating Officer';
+        const statusBadge = f.status === 'Approved' || f.status === 'Forensic Report Submitted'
+          ? `<span class="badge badge-status-solved" style="font-size:11px; padding:2px 8px;">${f.status}</span>`
+          : `<span class="badge priority-medium" style="font-size:11px; padding:2px 8px;">${f.status || 'Pending Analysis'}</span>`;
+        
+        tr.innerHTML = `
+          <td data-label="Evidence">
+            <strong style="color: #FFF; font-size: 13px;">${linkedEv.name || f.type}</strong>
+            <span style="display:block; font-size: 11px; color: var(--text-secondary); font-family: monospace;">Ref: ${f.id}</span>
+          </td>
+          <td data-label="Case">
+            <strong style="color: var(--primary-color); font-family: monospace;">${f.caseId}</strong>
+            <span style="display:block; font-size: 11px; color: var(--text-secondary);">${f.case?.title || 'Active Case'}</span>
+          </td>
+          <td data-label="Sender">
+            <span style="font-weight: 500; color: #FFF;">${senderStr}</span>
+          </td>
+          <td data-label="Date">
+            <span style="color: var(--text-secondary); font-size: 12px;">${dateStr}</span>
+          </td>
+          <td data-label="Status">${statusBadge}</td>
+          <td data-label="Action">
+            <button class="btn-primary" style="padding: 6px 12px; font-size: 11px; width: auto; background-color: var(--success-color); font-weight: 600; display: inline-flex; align-items: center; gap: 4px;" onclick="showSubmitForensicModal('${f.id}', '${f.caseId}', '${f.reportTitle || f.type}', '${f.type}')">
+              <i class="ri-upload-cloud-line"></i> Upload Report
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+  }
+
+  // 2. Populate Forensic Lab Archive Cards
   const container = document.getElementById('forensics-grid-container');
-  if (!container) return;
-  container.innerHTML = '';
-  
-  window.CIB_DB.forensics.forEach(f => {
-    const card = document.createElement('div');
-    card.className = 'lab-card';
-    card.style = 'background-color: var(--surface-color); border: 1px solid var(--border-light); border-radius: var(--radius-lg); padding: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); display: flex; flex-direction: column; gap: 16px;';
-    card.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:center;">
-        <span class="lab-badge" style="font-size: 11px; background-color: rgba(37, 99, 235, 0.15); color: var(--primary-color); border: 1px solid rgba(37, 99, 235, 0.25); padding: 4px 8px; border-radius: 4px; font-weight: 600;">${f.type}</span>
-        <span class="badge ${f.status === 'Approved' ? 'badge-status-solved' : 'priority-medium'}" style="font-size:11px; padding: 2px 10px; border-radius: 12px;">${f.status}</span>
-      </div>
-      <div>
-        <strong style="font-size:15px; display:block; margin-bottom:6px; color:#FFFFFF;">Case Link: <span style="font-family: monospace; color: var(--primary-color);">${f.caseId}</span></strong>
-        <p style="font-size:13px; color:var(--text-secondary); line-height:1.6; background-color: var(--card-color); padding: 12px; border-radius: 6px; border: 1px solid var(--border-color);">${f.summary}</p>
-      </div>
-      <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--text-secondary); border-top:1px solid var(--border-color); padding-top:12px; margin-top:auto;">
-        <span>Analyst: <strong>${f.analyst}</strong></span>
-        <span>${f.approvalDate}</span>
-      </div>
-      ${f.status !== 'Approved' ? `<button class="btn-primary" style="padding:10px; font-size:12px; margin-top:8px; border-radius: 6px;" onclick="approveForensicReport('${f.id}')">Approve Findings</button>` : ''}
-    `;
-    container.appendChild(card);
-  });
+  if (container) {
+    container.innerHTML = '';
+    const forensics = window.CIB_DB.forensics || [];
+    if (forensics.length === 0) {
+      container.innerHTML = `<div style="grid-column: 1/-1; padding: 24px; text-align: center; color: var(--text-secondary); background: var(--surface-color); border-radius: var(--radius-md); border: 1px dashed var(--border-color);">No forensic lab reports logged in registry.</div>`;
+      return;
+    }
+
+    forensics.forEach(f => {
+      const card = document.createElement('div');
+      card.className = 'lab-card';
+      card.style = 'background-color: var(--surface-color); border: 1px solid var(--border-light); border-radius: var(--radius-lg); padding: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); display: flex; flex-direction: column; gap: 14px;';
+      
+      const docLink = f.reportFileUrl ? `<a href="${f.reportFileUrl}" target="_blank" class="btn-primary" style="padding: 6px 12px; font-size: 11px; width: auto; background-color: var(--primary-color); display: inline-flex; align-items: center; gap: 4px;"><i class="ri-file-pdf-line"></i> View Report PDF</a>` : '';
+
+      card.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <span class="lab-badge" style="font-size: 11px; background-color: rgba(37, 99, 235, 0.15); color: var(--primary-color); border: 1px solid rgba(37, 99, 235, 0.25); padding: 4px 8px; border-radius: 4px; font-weight: 600;">${f.type || 'Lab Report'}</span>
+          <span class="badge ${f.status === 'Approved' || f.status === 'Forensic Report Submitted' ? 'badge-status-solved' : 'priority-medium'}" style="font-size:11px; padding: 2px 10px; border-radius: 12px;">${f.status}</span>
+        </div>
+        <div>
+          <strong style="font-size:14px; display:block; margin-bottom:4px; color:#FFFFFF;">${f.reportTitle || 'Forensic Analysis Report'}</strong>
+          <span style="font-size:12px; color:var(--text-secondary);">Case: <strong style="color:var(--primary-color); font-family:monospace;">${f.caseId}</strong></span>
+          <p style="font-size:12px; color:var(--text-secondary); line-height:1.5; background-color: var(--card-color); padding: 10px; border-radius: 6px; border: 1px solid var(--border-color); margin-top: 8px;">${f.summary}</p>
+          ${f.observations ? `<div style="font-size:11px; color:var(--text-secondary); margin-top:6px;">${f.observations}</div>` : ''}
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--text-secondary); border-top:1px solid var(--border-color); padding-top:10px; margin-top:auto;">
+          <span>Analyst: <strong style="color:#FFF;">${f.analyst || 'Forensic Specialist'}</strong></span>
+          ${docLink}
+        </div>
+      `;
+      container.appendChild(card);
+    });
+  }
 }
 
 function approveForensicReport(reportId) {
@@ -3233,33 +3292,55 @@ async function handleRequestForensicSubmit(event) {
   }
 }
 
-function showSubmitForensicModal(reportId, caseId = '') {
+function showSubmitForensicModal(reportId, caseId = '', defaultTitle = '', defaultType = '') {
   document.getElementById('submit-report-id').value = reportId;
   const caseIdInput = document.getElementById('submit-report-case-id');
   if (caseIdInput) caseIdInput.value = caseId;
+  
   const titleInput = document.getElementById('submit-forensic-title');
-  if (titleInput) titleInput.value = '';
-  document.getElementById('submit-forensic-summary').value = '';
+  if (titleInput) titleInput.value = defaultTitle ? `${defaultTitle} - Verified Findings` : '';
+  
+  const findingsInput = document.getElementById('submit-forensic-findings');
+  if (findingsInput) findingsInput.value = '';
+  
+  const recInput = document.getElementById('submit-forensic-recommendation');
+  if (recInput) recInput.value = '';
+  
+  const remarksInput = document.getElementById('submit-forensic-remarks');
+  if (remarksInput) remarksInput.value = '';
+  
   const fileInput = document.getElementById('submit-forensic-file');
   if (fileInput) fileInput.value = '';
+  
   const progressContainer = document.getElementById('forensic-progress-container');
   if (progressContainer) progressContainer.style.display = 'none';
+  
   showModal('modal-submit-forensic');
 }
 
 function handleSubmitForensicSubmit(event) {
   event.preventDefault();
-  const caseId = document.getElementById('submit-report-case-id')?.value || document.getElementById('submit-report-id').value;
+  const reportId = document.getElementById('submit-report-id').value;
+  const caseId = document.getElementById('submit-report-case-id')?.value || reportId;
   const titleInput = document.getElementById('submit-forensic-title');
   const fileInput = document.getElementById('submit-forensic-file');
-  const summaryInput = document.getElementById('submit-forensic-summary');
+  const findingsInput = document.getElementById('submit-forensic-findings');
+  const recommendationInput = document.getElementById('submit-forensic-recommendation');
+  const remarksInput = document.getElementById('submit-forensic-remarks');
+
+  if (fileInput && fileInput.files.length === 0) {
+    triggerToast("Please attach a PDF or Document report file.", "danger");
+    return;
+  }
 
   const token = sessionStorage.getItem('cib_jwt_token');
   const formData = new FormData();
+  formData.append('reportId', reportId);
   formData.append('caseId', caseId);
   formData.append('reportTitle', titleInput ? titleInput.value : 'Forensic Report');
-  formData.append('summary', summaryInput ? summaryInput.value : '');
-  formData.append('observations', summaryInput ? summaryInput.value : '');
+  formData.append('findings', findingsInput ? findingsInput.value : '');
+  formData.append('recommendation', recommendationInput ? recommendationInput.value : '');
+  formData.append('remarks', remarksInput ? remarksInput.value : '');
   if (fileInput && fileInput.files.length > 0) {
     formData.append('file', fileInput.files[0]);
   }
@@ -3289,9 +3370,9 @@ function handleSubmitForensicSubmit(event) {
     try {
       const result = JSON.parse(xhr.responseText);
       if (xhr.status >= 200 && xhr.status < 300 && result.success) {
-        triggerToast("Forensic report file and findings successfully submitted.", "success");
+        triggerToast("Forensic report PDF and findings uploaded & Inspector notified.", "success");
         hideModal('modal-submit-forensic');
-        await fetchAndRenderFirs();
+        await initDashboard();
         if (typeof renderForensicsLab === 'function') renderForensicsLab();
       } else {
         triggerToast(result.error || result.message || "Forensic upload failed.", "danger");
@@ -3304,7 +3385,7 @@ function handleSubmitForensicSubmit(event) {
 
   xhr.onerror = function() {
     if (submitBtn) submitBtn.disabled = false;
-    triggerToast("Network error during forensic report upload.", "danger");
+    triggerToast("Network error during report upload.", "danger");
   };
 
   xhr.send(formData);
